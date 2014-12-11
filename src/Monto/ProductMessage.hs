@@ -1,19 +1,42 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Monto.ProductMessage where
 
-import Data.Text (Text)
-import Data.Vector (Vector)
-import Data.Aeson.TH
-import Monto.VersionMessage(Source,Language)
+import           Data.Aeson.TH
+import           Data.Vector (Vector)
+import qualified Data.Vector as V
+import           Data.Text (Text)
+import qualified Data.Text as T
+import           Data.Maybe (fromMaybe)
 
-type Product = Text
+import           Monto.Dependency
 
 data ProductMessage =
   ProductMessage
-    { id :: Int
-    , source :: Source
-    , product :: Product
-    , language :: Language
-    , contents :: Text
-    }
-$(deriveJSON defaultOptions ''ProductMessage)
+    { versionId    :: Int
+    , productId    :: Int
+    , source       :: Source
+    , product      :: Product
+    , language     :: Language
+    , contents     :: Text
+    , dependencies :: Maybe (Vector Dependency)
+    , invalid      :: Maybe (Vector Invalid)
+    } deriving (Eq)
+$(deriveJSON (defaultOptions {
+  fieldLabelModifier = \s -> case s of
+    "versionId" -> "version_id"
+    "productId" -> "product_id"
+    s -> s
+}) ''ProductMessage)
+
+productDependencies :: ProductMessage -> Vector Dependency
+productDependencies product = fromMaybe V.empty $ dependencies product
+
+instance Show ProductMessage where
+  show (ProductMessage i j s p l _ _ _) =
+    concat [ "{", show i
+           , ",", show j
+           , ",", T.unpack s
+           , ",", T.unpack p
+           , ",", T.unpack l
+           , "}"
+           ]
