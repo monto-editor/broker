@@ -1,12 +1,10 @@
 module Monto.MessageStore where
 
-import           Control.Monad(foldM)
-
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Foldable (Foldable)
 import qualified Data.Foldable as F
-import           Data.Graph.Inductive (Gr,NodeMap,LNode,Node)
+import           Data.Graph.Inductive (Gr,Node)
 import qualified Data.Graph.Inductive as G
 import           Data.Maybe(catMaybes,fromMaybe)
 import           Data.Vector (Vector)
@@ -28,6 +26,8 @@ data MessageStore = MessageStore
   , maxNode      :: Int
   }
 
+empty :: MessageStore
+{-# INLINE empty #-}
 empty = MessageStore M.empty M.empty G.empty 0
 
 updateVersion :: VersionMessage -> MessageStore -> (Vector Invalid,MessageStore)
@@ -39,17 +39,19 @@ updateVersion version store =
   in (invalid,store'')
 
 updateProduct' :: ProductMessage -> MessageStore -> (Vector Invalid,MessageStore)
+{-# INLINE updateProduct' #-}
 updateProduct' p s = fromMaybe (V.empty,s) $ updateProduct p s
 
 updateProduct :: ProductMessage -> MessageStore -> Maybe (Vector Invalid,MessageStore)
 {-# INLINE updateProduct #-}
-updateProduct product store = do
-  let pid              = productId product
+updateProduct prod store = do
+  let pid              = productId prod
   let (invalid,store') = removeOldDependencies (Product pid) store
-  store'' <- addProduct product store'
+  store'' <- addProduct prod store'
   return (invalid,store'')
 
 addVersion :: VersionMessage -> MessageStore -> MessageStore
+{-# INLINE addVersion #-}
 addVersion version store = store
   { versions = M.insert source node (versions store)
   , dependencies = G.insNode (node,Version (vid,source,lang)) (dependencies store)
@@ -62,6 +64,7 @@ addVersion version store = store
     source = V.source version
 
 removeOldDependencies :: Dependency -> MessageStore -> (Vector Invalid,MessageStore)
+{-# INLINE removeOldDependencies #-}
 removeOldDependencies dep store = fromMaybe (V.empty,store) $ do
   let rdeps = reverseDependencies dep store
   old <- case dep of
@@ -75,13 +78,14 @@ removeOldDependencies dep store = fromMaybe (V.empty,store) $ do
   return (invalid,F.foldr removeDependency store invalid)
 
 removeDependency :: ReverseDependency -> MessageStore -> MessageStore
-removeDependency (Version (vid,s,l)) store = fromMaybe store $ do
+{-# INLINE removeDependency #-}
+removeDependency (Version (_,s,_)) store = fromMaybe store $ do
   node <- M.lookup s (versions store)
   return $ store
     { versions     = M.delete s (versions store)
     , dependencies = G.delNode node (dependencies store)
     }
-removeDependency (Product (vid,pid,s,l,p)) store = fromMaybe store $ do
+removeDependency (Product (_,_,s,l,p)) store = fromMaybe store $ do
   node <- M.lookup (s,l,p) (products store)
   return $ store
     { products     = M.delete (s,l,p) (products store)
@@ -89,35 +93,38 @@ removeDependency (Product (vid,pid,s,l,p)) store = fromMaybe store $ do
     }
 
 addProduct :: ProductMessage -> MessageStore -> Maybe MessageStore
-addProduct product store = do
+{-# INLINE addProduct #-}
+addProduct productMessage store = do
   versionNode <- M.lookup source (versions store)
   version     <- G.lab (dependencies store) versionNode
-  addDependencyEdges node (V.cons version (P.productDependencies product)) $ store
+  addDependencyEdges node (V.cons version (P.productDependencies productMessage)) $ store
     { products     = M.insert (source,lang,prod) node (products store)
     , dependencies = G.insNode (node,dep) (dependencies store)
     , maxNode      = node + 1
     }
   where
     node   = maxNode store
-    vid    = P.versionId product
-    pid    = P.productId product
-    lang   = P.language  product
-    source = P.source    product
-    prod   = P.product   product
+    vid    = P.versionId productMessage
+    pid    = P.productId productMessage
+    lang   = P.language  productMessage
+    source = P.source    productMessage
+    prod   = P.product   productMessage
     dep    = Product (vid,pid,source,lang,prod)
 
 addDependencyEdges :: Foldable f => Node -> f Dependency -> MessageStore -> Maybe MessageStore
+{-# INLINE addDependencyEdges #-}
 addDependencyEdges from deps store =
   F.foldlM addDependencyEdge store deps
   where
-    addDependencyEdge store (Version (vid,s,l)) = do
+    addDependencyEdge st (Version (_,s,_)) = do
       to <- M.lookup s (versions store)
-      return $ store { dependencies = G.insEdge (from,to,()) (dependencies store) }
-    addDependencyEdge store (Product (vid,pid,s,l,p)) = do
+      return $ st { dependencies = G.insEdge (from,to,()) (dependencies st) }
+    addDependencyEdge st (Product (_,_,s,l,p)) = do
       to <- M.lookup (s,l,p) (products store)
-      return $ store { dependencies = G.insEdge (from,to,()) (dependencies store) }
+      return $ st { dependencies = G.insEdge (from,to,()) (dependencies st) }
 
 reverseDependencies :: Dependency -> MessageStore -> [ReverseDependency]
+{-# INLINE reverseDependencies #-}
 reverseDependencies (Version (_,s,_)) store = fromMaybe [] $ do
   node <- M.lookup s (versions store)
   let deps = dependencies store
@@ -126,7 +133,6 @@ reverseDependencies (Product (_,_,s,l,p)) store = fromMaybe [] $ do
   node <- M.lookup (s,l,p) (products store)
   let deps = dependencies store
   return $ catMaybes $ map (G.lab deps) $ G.rdfs [node] deps
-{-# INLINE reverseDependencies #-}
 
 -- Helper functions and instances
 
@@ -135,7 +141,7 @@ versionId version = (V.versionId version,V.source version,V.language version)
 {-# INLINE versionId #-}
 
 productId :: ProductMessage -> (VersionID,ProductID,Source,Product,Language)
-productId product = (P.productId product, P.versionId product, P.source product,P.product product, P.language product)
+productId prod = (P.productId prod, P.versionId prod, P.source prod,P.product prod, P.language prod)
 {-# INLINE productId #-}
 
 instance Eq MessageStore where
@@ -144,9 +150,9 @@ instance Eq MessageStore where
           && dependencies m1 == dependencies m2
 
 instance Show MessageStore where
-  show (MessageStore versions products deps _) =
+  show (MessageStore vs ps deps _) =
     unwords [ "MessageStore", "\n"
-            , show versions, "\n"
-            , show products, "\n"
+            , show vs, "\n"
+            , show ps, "\n"
             , show deps
             ]

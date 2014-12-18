@@ -1,8 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import           System.ZMQ4
+import           System.ZMQ4 hiding (message)
 import           System.Posix.Signals (installHandler, Handler(Catch), sigINT, sigTERM)
+
+import           Systemd.Journal
 
 import           Control.Applicative
 import           Control.Concurrent
@@ -10,6 +12,8 @@ import           Control.Monad
 
 import qualified Data.Aeson as A
 import           Data.Foldable (for_)
+import           Data.Text (Text)
+import qualified Data.Text as T
 
 import           Monto.MessageStore (MessageStore)
 import qualified Monto.MessageStore as Store
@@ -18,6 +22,18 @@ import qualified Monto.VersionMessage as V
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 
+import           Options.Applicative
+
+data Options = Options
+  { debug :: Bool
+  }
+
+options :: Parser Options
+options = Options <$>
+  switch (  long "debug"
+         <> help "print messages that are transmitted over the broker"
+         )
+
 data Sockets = Sockets
   { fromSources :: Socket Sub
   , toServers   :: Socket Pub
@@ -25,30 +41,42 @@ data Sockets = Sockets
   , toSinks     :: Socket Pub
   }
 
-onVersionMessage :: VersionMessage -> Sockets -> MessageStore -> IO MessageStore
-onVersionMessage versionMessage sockets store = do
+onVersionMessage :: Options -> VersionMessage -> Sockets -> MessageStore -> IO MessageStore
+{-# INLINE onVersionMessage #-}
+onVersionMessage opts versionMessage sockets store = do
   let (invalid,store') = Store.updateVersion versionMessage store
       response         = A.encode $ versionMessage { V.invalid = Just invalid }
+  when (debug opts) $ sendMessageWith (textShow (Store.versionId versionMessage)) (priority Debug)
   send' (toServers sockets) [] response
   return store'
-{-# INLINE onVersionMessage #-}
 
-onProductMessage :: ProductMessage -> Sockets -> MessageStore -> IO MessageStore
-onProductMessage productMessage sockets store = do
+onProductMessage :: Options -> ProductMessage -> Sockets -> MessageStore -> IO MessageStore
+{-# INLINE onProductMessage #-}
+onProductMessage opts productMessage sockets store = do
   case Store.updateProduct productMessage store of
     Just (invalid,store') -> do
       let response = A.encode $ productMessage { P.invalid = Just invalid }
+      when (debug opts) $ sendMessageWith (textShow (Store.productId productMessage)) (priority Debug)
       send' (toSinks sockets) [] response
       return store'
-    Nothing ->
+    Nothing -> do
+      sendMessageWith (
+        "Some dependencies are not there\n"
+        <> "product message: " <> textShow (Store.productId productMessage) <> "\n"
+        <> "dependencies: " <> textShow (P.dependencies productMessage) <> "\n"
+        <> "store: " <> textShow store)
+        (priority Warning)
       return store
-{-# INLINE onProductMessage #-}
 
 data Interrupted = Interrupted
   deriving (Eq,Show)
 
 main :: IO ()
 main = do
+  opts <- execParser $ info (helper <*> options)
+    ( fullDesc
+    <> progDesc "Monto Broker"
+    )
   withContext $ \ctx ->
     withSocket ctx Sub $ \fromSourcesSocket ->
     withSocket ctx Pub $ \toServersSocket ->
@@ -67,24 +95,24 @@ main = do
       messageStore <- newMVar $ Store.empty
       interrupted <- newEmptyMVar
 
-      _ <- installHandler sigINT (Catch $ stopExcecution interrupted) Nothing
-      _ <- installHandler sigTERM (Catch $ stopExcecution interrupted) Nothing
+      _ <- installHandler sigINT  (Catch (stopExcecution interrupted)) Nothing
+      _ <- installHandler sigTERM (Catch (stopExcecution interrupted)) Nothing
 
       sourcesToServers <- forkIO $ forever $ do
         msg <- A.decodeStrict <$> receive fromSourcesSocket 
-        for_ msg $ \msg' -> modifyMVar_ messageStore $ onVersionMessage msg' sockets
+        for_ msg $ \msg' -> modifyMVar_ messageStore $ onVersionMessage opts msg' sockets
 
       productsToSinks <- forkIO $ forever $ do
         msg <- A.decodeStrict <$> receive fromServersSocket
-        for_ msg $ \msg' -> modifyMVar_ messageStore $ onProductMessage msg' sockets
+        for_ msg $ \msg' -> modifyMVar_ messageStore $ onProductMessage opts msg' sockets
 
-      putStrLn "running"
       _ <- readMVar interrupted
       killThread sourcesToServers
       killThread productsToSinks
-      putStrLn "bye"
 
 stopExcecution :: MVar Interrupted -> IO ()
 stopExcecution interrupted = do
-  putStrLn "shutdown"
   putMVar interrupted Interrupted
+
+textShow :: Show a => a -> Text
+textShow = T.pack . show

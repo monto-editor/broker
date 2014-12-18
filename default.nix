@@ -7,6 +7,7 @@ with pkgs.haskellPackages; cabal.mkDerivation (self: {
   buildDepends = [
     cabalInstall zeromq4Haskell aeson
     hspec QuickCheck fgl pkgs.graphviz
+    optparseApplicative libsystemdJournal
   ];
   meta = {
     license = self.stdenv.lib.licenses.gpl3;

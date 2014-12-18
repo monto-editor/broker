@@ -25,11 +25,11 @@ $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
     "versionId" -> "version_id"
     "productId" -> "product_id"
-    s -> s
+    label -> label
 }) ''ProductMessage)
 
 productDependencies :: ProductMessage -> Vector Dependency
-productDependencies product = fromMaybe V.empty $ dependencies product
+productDependencies = fromMaybe V.empty . dependencies
 
 instance Show ProductMessage where
   show (ProductMessage i j s p l _ _ _) =

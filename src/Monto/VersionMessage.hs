@@ -25,7 +25,7 @@ data VersionMessage =
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
     "versionId" -> "version_id"
-    s -> s
+    label -> label
 }) ''VersionMessage)
 
 instance Show VersionMessage where
