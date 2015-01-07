@@ -8,7 +8,8 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Maybe (fromMaybe)
 
-import           Monto.Dependency
+import           Monto.Types
+import           Monto.ProductDependency
 
 data ProductMessage =
   ProductMessage
@@ -18,7 +19,7 @@ data ProductMessage =
     , product      :: Product
     , language     :: Language
     , contents     :: Text
-    , dependencies :: Maybe (Vector Dependency)
+    , dependencies :: Maybe (Vector ProductDependency)
     , invalid      :: Maybe (Vector Invalid)
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
@@ -28,7 +29,7 @@ $(deriveJSON (defaultOptions {
     label -> label
 }) ''ProductMessage)
 
-productDependencies :: ProductMessage -> Vector Dependency
+productDependencies :: ProductMessage -> Vector ProductDependency
 productDependencies = fromMaybe V.empty . dependencies
 
 instance Show ProductMessage where

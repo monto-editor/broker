@@ -1,22 +1,16 @@
 module Monto.Request where
 
-import Monto.VersionMessage (Source,Language)
-import Monto.ProductMessage (Product)
-import Monto.MessageStore (MessageStore,versionExists,productExists)
+import Data.Vector (Vector)
 
-newtype Request = Request { getRequirements :: [Requirement] }
-  deriving Show
+import Monto.Types (Source,Language,Product)
+
+newtype Request = Request
+  { requirements :: Vector Requirement
+  }
+  deriving (Show,Eq)
 
 data Requirement
-  = Version (Source,Language)
+  = Version Source
   | Product (Source,Language,Product)
   deriving (Show,Eq,Ord)
 
-allRequirementsForRequestAreFulfilled :: MessageStore -> Request -> Bool
-allRequirementsForRequestAreFulfilled store = all (reqirementExist store) . getRequirements
-
-reqirementExist :: MessageStore -> Requirement -> Bool
-reqirementExist store requirement =
-  case requirement of
-    Version version -> versionExists version store
-    Product product -> productExists product store

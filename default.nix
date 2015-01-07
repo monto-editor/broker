@@ -8,6 +8,7 @@ with pkgs.haskellPackages; cabal.mkDerivation (self: {
     cabalInstall zeromq4Haskell aeson
     hspec QuickCheck fgl pkgs.graphviz
     optparseApplicative libsystemdJournal
+    lattices
   ];
   meta = {
     license = self.stdenv.lib.licenses.gpl3;

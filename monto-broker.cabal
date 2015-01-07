@@ -14,15 +14,18 @@ cabal-version:       >=1.10
 
 
 library
-  exposed-modules:     Monto.MessageStore,
+  exposed-modules:     Monto.Broker,
                        Monto.VersionMessage,
                        Monto.ProductMessage,
-                       Monto.Dependency
+                       Monto.ProductDependency,
+                       Monto.ServerDependency
+  other-modules:       Monto.Automaton
   build-depends:       base,
                        aeson,
                        containers,
-                       text,
                        fgl,
+                       semigroups,
+                       text,
                        vector
   ghc-options:         -Wall -O2
   hs-source-dirs:      src/
@@ -34,13 +37,14 @@ executable broker
   -- other-extensions:    
   ghc-options:         -Wall -O2 -threaded
   build-depends:       base,
-                       monto-broker,
                        aeson,
-                       text,
-                       vector,
+                       containers,
+                       fgl,
+                       monto-broker,
                        optparse-applicative,
-                       libsystemd-journal >= 1.2.1,
+                       text,
                        unix,
+                       vector,
                        zeromq4-haskell
   hs-source-dirs:      broker/
   default-language:    Haskell2010
@@ -51,11 +55,11 @@ test-suite specs
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base,
+                       QuickCheck,
                        containers,
-                       monto-broker,
                        fgl,
-                       vector,
-                       text,
                        hspec,
-                       QuickCheck
+                       monto-broker,
+                       text,
+                       vector
   default-language:    Haskell2010
