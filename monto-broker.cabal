@@ -19,7 +19,8 @@ library
                        Monto.ProductMessage,
                        Monto.ProductDependency,
                        Monto.ServerDependency
-  other-modules:       Monto.Automaton
+                       Monto.Automaton,
+                       Monto.ResourceManager
   build-depends:       base,
                        aeson,
                        containers,

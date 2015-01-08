@@ -94,7 +94,7 @@ newVersion version broker =
         { resourceMgr = snd $ R.updateVersion version $ resourceMgr broker
         , processes   = M.insert (V.source version) process' (processes broker)
         }
-  in (r,broker')
+  in (S.toList r,broker')
 
 newProduct :: ProductMessage -> Broker -> (Responses,Broker)
 {-# INLINE newProduct #-}
@@ -107,9 +107,7 @@ newProduct pr broker =
         { resourceMgr = snd $ R.updateProduct' pr $ resourceMgr broker
         , processes   = M.insert (P.product pr) process' (processes broker)
         }
-  in (r,broker')
-
-request :: 
+  in (S.toList r,broker')
 
 updateAutomaton :: Gr ServerDependency () -> CompiledAutomaton Server (Set Server)
 {-# INLINE updateAutomaton #-}
