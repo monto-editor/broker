@@ -148,8 +148,8 @@ lookupVersionMessage s resourceMgr = do
 
 lookupProductMessage :: (Source,Language,Product) -> ResourceManager -> Maybe ProductMessage
 lookupProductMessage s resourceMgr = do
-  (product,_) <- M.lookup s (products resourceMgr)
-  return product
+  (prod,_) <- M.lookup s (products resourceMgr)
+  return prod
 
 -- Helper functions and instances
 

@@ -1,25 +1,23 @@
 module Main where
 
 import           System.ZMQ4 hiding (message)
-{-import           System.Posix.Signals (installHandler, Handler(Catch), sigINT, sigTERM)-}
+import           System.Posix.Signals (installHandler, Handler(Catch), sigINT, sigTERM)
 
 import           Control.Applicative
 import           Control.Concurrent
 import           Control.Monad
 
-{-import qualified Data.Aeson as A-}
-{-import           Data.Foldable (for_)-}
-{-import           Data.Text (Text)-}
-{-import qualified Data.Text as T-}
+import qualified Data.Aeson as A
+import           Data.Foldable (for_)
 import           Data.Map (Map)
 import qualified Data.Map as M
 
-import           Monto.Broker (Broker)
+import           Monto.ServerDependency (Server,ServerDependency(..))
+import           Monto.Broker (Broker,Response)
 import qualified Monto.Broker as B
-import           Monto.ServerDependency (Server,ServerDependency)
-{-import           Monto.VersionMessage (VersionMessage)-}
+import           Monto.VersionMessage (VersionMessage)
+import           Monto.ProductMessage (ProductMessage)
 {-import qualified Monto.VersionMessage as V-}
-{-import           Monto.ProductMessage (ProductMessage)-}
 {-import qualified Monto.ProductMessage as P-}
 
 import           Options.Applicative
@@ -43,93 +41,70 @@ start = do
     <> progDesc "Monto Broker"
     )
   withContext $ \ctx ->
-    withServers ctx B.empty (servers opts) $ \broker sockets -> do
-      putStrLn "Hello World"
+    withServers ctx B.empty (servers opts) $ \b0 sockets -> do
 
-withServers :: Context -> Broker -> [(Server,[ServerDependency],Addr)] -> (Broker -> Map Server (Socket Pub) -> IO b) -> IO b
-withServers ctx b0 servers k = go b0 servers M.empty
+      broker <- newMVar b0
+      interrupted <- newEmptyMVar
+
+      let stopExcecution = putMVar interrupted Interrupted
+      _ <- installHandler sigINT  (Catch stopExcecution) Nothing
+      _ <- installHandler sigTERM (Catch stopExcecution) Nothing
+
+      threads <- forM (M.toList sockets) $ \(server,sckt) ->
+        case server of
+          Source -> forkIO $ forever $ do
+            msg <- A.decodeStrict <$> receive sckt
+            for_ msg $ \msg' -> modifyMVar_ broker $ onVersionMessage opts msg' sockets
+          _ -> forkIO $ forever $ do
+            msg <- A.decodeStrict <$> receive sckt
+            for_ msg $ \msg' -> modifyMVar_ broker $ onProductMessage opts msg' sockets
+
+      _ <- readMVar interrupted
+      forM_ threads killThread
+
+type Sockets = Map Server (Socket Pair)
+
+withServers :: Context -> Broker -> [(Server,[ServerDependency],Addr)] -> (Broker -> Sockets -> IO b) -> IO b
+withServers ctx b0 s k = go b0 s M.empty
   where
     go b ((server,deps,addr):rest) sockets = do
-      withSocket ctx Pub $ \socket -> do
-        bind socket addr
-        go (B.register server deps b) rest (M.insert server socket sockets)
+      withSocket ctx Pair $ \sckt -> do
+        bind sckt addr
+        go (B.register server deps b) rest (M.insert server sckt sockets)
     go b [] sockets = k b sockets
 
 main :: IO ()
 main = start
 
-{-onVersionMessage :: Options -> VersionMessage -> Sockets -> MessageStore -> IO MessageStore-}
-{-[># INLINE onVersionMessage #<]-}
-{-onVersionMessage opts versionMessage sockets store = do-}
-  {-let (invalid,store') = Store.updateVersion versionMessage store-}
-      {-response         = A.encode $ versionMessage { V.invalid = Just invalid }-}
-  {-when (debug opts) $ sendMessageWith (textShow (Store.versionId versionMessage)) (priority Debug)-}
-  {-send' (toServers sockets) [] response-}
-  {-return store'-}
+onVersionMessage :: Options -> VersionMessage -> Sockets -> Broker -> IO Broker
+{-# INLINE onVersionMessage #-}
+onVersionMessage = onMessage B.newVersion
 
-{-onProductMessage :: Options -> ProductMessage -> Sockets -> MessageStore -> IO MessageStore-}
-{-[># INLINE onProductMessage #<]-}
-{-onProductMessage opts productMessage sockets store = do-}
-  {-case Store.updateProduct productMessage store of-}
-    {-Just (invalid,store') -> do-}
-      {-let response = A.encode $ productMessage { P.invalid = Just invalid }-}
-      {-when (debug opts) $ sendMessageWith (textShow (Store.productId productMessage)) (priority Debug)-}
-      {-send' (toSinks sockets) [] response-}
-      {-return store'-}
-    {-Nothing -> do-}
-      {-sendMessageWith (-}
-        {-"Some dependencies are not there\n"-}
-        {-<> "product message: " <> textShow (Store.productId productMessage) <> "\n"-}
-        {-<> "dependencies: " <> textShow (P.dependencies productMessage) <> "\n"-}
-        {-<> "store: " <> textShow store)-}
-        {-(priority Warning)-}
-      {-return store-}
+onProductMessage :: Options -> ProductMessage -> Sockets -> Broker -> IO Broker
+{-# INLINE onProductMessage #-}
+onProductMessage = onMessage B.newProduct
 
-{-data Interrupted = Interrupted-}
-  {-deriving (Eq,Show)-}
+onMessage :: (message -> Broker -> ([Response],Broker)) -> Options -> message -> Sockets -> Broker -> IO Broker
+{-# INLINE onMessage #-}
+onMessage handler opts msg sockets broker = do
+  let (responses,broker') = handler msg broker
+  sendResponses opts sockets responses
+  return broker'
 
-{-main :: IO ()-}
-{-main = do-}
-  {-opts <- execParser $ info (helper <*> options)-}
-    {-( fullDesc-}
-    {-<> progDesc "Monto Broker"-}
-    {-)-}
-  {-withContext $ \ctx ->-}
-    {-withSocket ctx Sub $ \fromSourcesSocket ->-}
-    {-withSocket ctx Pub $ \toServersSocket ->-}
-    {-withSocket ctx Sub $ \fromServersSocket ->-}
-    {-withSocket ctx Pub $ \toSinksSocket -> do-}
-      {-let sockets = Sockets fromSourcesSocket toServersSocket fromServersSocket toSinksSocket-}
+sendResponses :: Options -> Sockets -> [Response] -> IO ()
+{-# INLINE sendResponses #-}
+sendResponses opts sockets = mapM_ (sendResponse opts sockets)
 
-      {-bind fromSourcesSocket "tcp://*:5000"-}
-      {-bind toServersSocket   "tcp://*:5001"-}
-      {-bind fromServersSocket "tcp://*:5002"-}
-      {-bind toSinksSocket     "tcp://*:5003"-}
+sendResponse :: Options -> Sockets -> Response -> IO ()
+{-# INLINE sendResponse #-}
+sendResponse opts sockets (B.Response server reqs) = do
+  let response = A.encode $ A.toJSON $ map toJSON reqs
+  send' (sockets M.! server) [] response
+  when (debug opts) $ putStrLn $ "Response -> " ++ show server
+  where
+    toJSON req = case req of
+      B.Version vers -> A.toJSON vers
+      B.Product prod -> A.toJSON prod
 
-      {-subscribe fromSourcesSocket ""-}
-      {-subscribe fromServersSocket ""-}
-
-      {-messageStore <- newMVar $ Store.empty-}
-      {-interrupted <- newEmptyMVar-}
-
-      {-_ <- installHandler sigINT  (Catch (stopExcecution interrupted)) Nothing-}
-      {-_ <- installHandler sigTERM (Catch (stopExcecution interrupted)) Nothing-}
-
-      {-sourcesToServers <- forkIO $ forever $ do-}
-        {-msg <- A.decodeStrict <$> receive fromSourcesSocket -}
-        {-for_ msg $ \msg' -> modifyMVar_ messageStore $ onVersionMessage opts msg' sockets-}
-
-      {-productsToSinks <- forkIO $ forever $ do-}
-        {-msg <- A.decodeStrict <$> receive fromServersSocket-}
-        {-for_ msg $ \msg' -> modifyMVar_ messageStore $ onProductMessage opts msg' sockets-}
-
-      {-_ <- readMVar interrupted-}
-      {-killThread sourcesToServers-}
-      {-killThread productsToSinks-}
-
-{-stopExcecution :: MVar Interrupted -> IO ()-}
-{-stopExcecution interrupted = do-}
-  {-putMVar interrupted Interrupted-}
-
-{-textShow :: Show a => a -> Text-}
-{-textShow = T.pack . show-}
+data Interrupted = Interrupted
+  deriving (Eq,Show)

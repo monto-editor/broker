@@ -6,8 +6,12 @@ module Monto.Broker
   , Broker
   , newVersion
   , newProduct
+  , Response (..)
+  , Message (..)
   )
   where
+
+import           Control.Applicative hiding (empty)
 
 import           Data.Graph.Inductive (Gr,Node)
 import qualified Data.Graph.Inductive as G
@@ -37,6 +41,9 @@ data Broker = Broker
   , automaton    :: CompiledAutomaton Server (Set Server)
   , processes    :: Map Source (Process Server (Set Server))
   } deriving (Eq,Show)
+
+data Message = Version VersionMessage | Product ProductMessage
+data Response = Response Server [Message]
 
 empty :: Broker
 {-# INLINE empty #-}
@@ -81,9 +88,7 @@ registerServer broker server =
   where
     newNode = maxNode broker + 1
 
-type Responses = [Server]
-
-newVersion :: VersionMessage -> Broker -> (Responses,Broker)
+newVersion :: VersionMessage -> Broker -> ([Response],Broker)
 {-# INLINE newVersion #-}
 newVersion version broker =
   let process = fromMaybe (A.start (automaton broker))
@@ -94,20 +99,32 @@ newVersion version broker =
         { resourceMgr = snd $ R.updateVersion version $ resourceMgr broker
         , processes   = M.insert (V.source version) process' (processes broker)
         }
-  in (S.toList r,broker')
+  in (map (makeResponse (V.source version) broker') (S.toList r),broker')
 
-newProduct :: ProductMessage -> Broker -> (Responses,Broker)
+newProduct :: ProductMessage -> Broker -> ([Response],Broker)
 {-# INLINE newProduct #-}
 newProduct pr broker =
   let process = fromMaybe (A.start (automaton broker))
               $ M.lookup (P.source pr)
               $ processes broker
-      (r,process') = fromMaybe (S.empty,process) $ A.runProcess (Server (P.product pr)) process
+      (r,process') = fromMaybe (S.empty,process) $ A.runProcess (Server (P.product pr) (P.language pr)) process
       broker' = broker
         { resourceMgr = snd $ R.updateProduct' pr $ resourceMgr broker
         , processes   = M.insert (P.product pr) process' (processes broker)
         }
-  in (S.toList r,broker')
+  in (map (makeResponse (P.source pr) broker') (S.toList r),broker')
+
+makeResponse :: Source -> Broker -> Server -> Response
+makeResponse source broker server =
+  let serverNode = servers broker M.! server
+      deps = do
+        depNode <- G.suc (dependencies broker) serverNode
+        let dep = fromJust $ G.lab (dependencies broker) depNode
+        return $ fromJust $ case dep of
+          Source -> Version <$> R.lookupVersionMessage source (resourceMgr broker)
+          Server prod lang -> Product <$> R.lookupProductMessage (source,lang,prod) (resourceMgr broker)
+          Star -> error "Star cannot be a dependency"
+  in Response server deps
 
 updateAutomaton :: Gr ServerDependency () -> CompiledAutomaton Server (Set Server)
 {-# INLINE updateAutomaton #-}
