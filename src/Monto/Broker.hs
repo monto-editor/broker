@@ -91,9 +91,7 @@ registerServer broker server =
 newVersion :: VersionMessage -> Broker -> ([Response],Broker)
 {-# INLINE newVersion #-}
 newVersion version broker =
-  let process = fromMaybe (A.start (automaton broker))
-              $ M.lookup (V.source version)
-              $ processes broker
+  let process = A.start (automaton broker)
       (r,process') = fromMaybe (S.empty,process) $ A.runProcess Source process
       broker' = broker
         { resourceMgr = snd $ R.updateVersion version $ resourceMgr broker
