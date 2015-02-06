@@ -7,8 +7,6 @@ import           Control.Monad hiding (when)
 import           Data.Semigroup
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.IntSet (IntSet)
-import qualified Data.IntSet as IS
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.List (nub)
@@ -63,7 +61,6 @@ leastUpperBound Bottom Bottom = Bottom
 leastUpperBound _ _           = Top
 
 instance (Ord i, Eq o, Semigroup o) => Semigroup (Automaton (Map i L) i o) where
-
   (<>) = merge
 
 merge :: (Ord i, Eq o, Semigroup o) => Automaton (Map i L) i o -> Automaton (Map i L) i o -> Automaton (Map i L) i o
@@ -131,63 +128,54 @@ states auto = nub
   ++ [ s | (_,_,s,_) <- transitions auto ]
   ++ accepting auto
 
-data CompiledAutomaton i o = CompiledAutomaton
-  { initState  :: Int
-  , transition :: Map (Int,i) (Int,o)
-  , final      :: IntSet
+data CompiledAutomaton state input output = CompiledAutomaton
+  { initState  :: state
+  , transition :: Map (state,input) (state,output)
+  , final      :: Set state
   } deriving (Eq,Show)
 
-compileAutomaton :: (Ord s,Ord i) => Automaton s i o -> CompiledAutomaton i o
+compileAutomaton :: (Ord s,Ord i) => Automaton s i o -> CompiledAutomaton s i o
 compileAutomaton auto = CompiledAutomaton
-  { initState  = stateEncoding (initialState auto)
+  { initState  = initialState auto
   , transition = trans
   , final      = finalStates
   }
   where
-    sts = M.fromList (zip (states auto) [1..])
-    stateEncoding s = sts M.! s
-    trans = M.fromList [ ((stateEncoding s,i),(stateEncoding s',o)) | (s,i,s',o) <- transitions auto ]
-    finalStates = IS.fromList (stateEncoding <$> accepting auto)
+    trans = M.fromList [ ((s,i),(s',o)) | (s,i,s',o) <- transitions auto ]
+    finalStates = S.fromList (accepting auto)
 
-empty :: CompiledAutomaton i o
-empty = CompiledAutomaton
-  { initState  = 0
-  , transition = M.empty
-  , final      = IS.singleton 0
-  }
-
-data Process i o = Process
-  { currentState :: Int
-  , automaton    :: CompiledAutomaton i o
+data Process state input output = Process
+  { currentState :: state
+  , automaton    :: CompiledAutomaton state input output
   } deriving (Eq,Show)
 
-start :: CompiledAutomaton i o -> Process i o
+start :: CompiledAutomaton state input output -> Process state input output
 {-# INLINE start #-}
 start auto = Process
   { currentState = initState auto
   , automaton    = auto
   }
 
-restart :: Process i o -> Process i o
+restart :: Process s i o -> Process s i o
 {-# INLINE restart #-}
 restart p = start (automaton p)
 
-runProcess :: Ord i => i -> Process i o -> Maybe (o,Process i o)
+runProcess :: (Ord s,Ord i) => i -> Process s i o -> Maybe (o,Process s i o)
 {-# INLINE runProcess #-}
 runProcess i p = do
   let s = currentState p
   (s',o) <- M.lookup (s,i) $ transition $ automaton p
   return (o,p { currentState = s' })
 
-finished :: Process i o -> Bool
+finished :: Ord s => Process s i o -> Bool
 {-# INLINE finished #-}
-finished p = currentState p `IS.member` final (automaton p)
+finished p = currentState p `S.member` final (automaton p)
   
-toDot :: (Show i,Show o) => CompiledAutomaton i o -> Text
+toDot :: (Show s, Show i,Show o) => CompiledAutomaton s i o -> Text
 toDot auto = T.unlines $
   ["digraph G {"] ++ transitionsToDot auto ++ ["}"]
 
-transitionsToDot :: (Show i,Show o) => CompiledAutomaton i o -> [Text]
+transitionsToDot :: (Show s, Show i,Show o) => CompiledAutomaton s i o -> [Text]
 transitionsToDot auto = do
   ((s,i),(s',o)) <- M.toList (transition auto)
   return $ T.unwords [ state s, " -> ", state s', T.concat ["[ label = \"", tshow i, ",", tshow o, "\" ]"]]
