@@ -3,6 +3,7 @@
 module Monto.StaticDependencyManager
   ( empty
   , StaticDependencyManager
+  , Server(..)
   , register
   , newVersion
   , newProduct
@@ -11,7 +12,7 @@ module Monto.StaticDependencyManager
 
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Maybe (fromJust,fromMaybe)
+import           Data.Maybe (fromMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as S
 
@@ -22,11 +23,8 @@ import           Monto.VersionMessage (VersionMessage)
 import qualified Monto.VersionMessage as V
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
-import           Monto.DependencyManager (DependencyManager,Dependency)
+import           Monto.DependencyManager (DependencyManager,Dependency(..),ProductDependency(..),Response(..),Server(..))
 import qualified Monto.DependencyManager as D
-
-data Server = Server { product :: Product, language :: Language }
-  deriving (Eq,Ord,Show)
 
 type Dep = Dependency Server
 
@@ -36,8 +34,6 @@ data StaticDependencyManager
   , processes     :: Map Source (Process (Map Dep L) Dep (Set Dep))
   } deriving (Eq,Show)
 
-data Response = Response Dep [Dep]
-
 empty :: StaticDependencyManager
 {-# INLINE empty #-}
 empty = StaticDependencyManager
@@ -45,7 +41,7 @@ empty = StaticDependencyManager
   , processes     = M.empty
   }
 
-register :: Server -> [Server] -> StaticDependencyManager -> StaticDependencyManager
+register :: Server -> [Dependency Server] -> StaticDependencyManager -> StaticDependencyManager
 {-# INLINE register #-}
 register from to manager =
   let mgr' = D.register from to (dependencyMgr manager)
@@ -59,9 +55,9 @@ newVersion :: VersionMessage -> StaticDependencyManager -> ([Response],StaticDep
 {-# INLINE newVersion #-}
 newVersion version manager =
   let process = A.start (A.compileAutomaton (D.automaton (dependencyMgr manager)))
-      (r,process') = fromMaybe (S.empty,process) $ A.runProcess D.Bottom process
+      (r,process') = fromMaybe (S.empty,process) $ A.runProcess Bottom process
       manager' = manager { processes = M.insert (V.source version) process' (processes manager) }
-  in (map (makeResponse manager') (S.toList r),manager')
+  in (map (makeResponse manager' (V.source version)) (S.toList r),manager')
 
 newProduct :: ProductMessage -> StaticDependencyManager -> ([Response],StaticDependencyManager)
 {-# INLINE newProduct #-}
@@ -69,10 +65,15 @@ newProduct pr manager =
   let process = fromMaybe (A.start (A.compileAutomaton (D.automaton (dependencyMgr manager))))
               $ M.lookup (P.source pr)
               $ processes manager
-      (r,process') = fromMaybe (S.empty,process) $ A.runProcess (D.Dependency (Server (P.product pr) (P.language pr))) process
+      (r,process') = fromMaybe (S.empty,process) $ A.runProcess (Dependency (Server (P.product pr) (P.language pr))) process
       manager' = manager { processes   = M.insert (P.product pr) process' (processes manager) }
-  in (map (makeResponse manager') (S.toList r),manager')
+  in (map (makeResponse manager' (P.source pr)) (S.toList r),manager')
 
-makeResponse :: StaticDependencyManager -> Dep -> Response
-makeResponse manager server =
-  Response server (fromJust (D.lookupDependencies server (dependencyMgr manager)))
+makeResponse :: StaticDependencyManager -> Source -> Dep -> Response
+makeResponse manager source s@(Dependency server) =
+  let deps = D.lookupDependencies s (dependencyMgr manager)
+      depForServer (Dependency (Server prod lang)) = Product (source,prod,lang)
+      depForServer Bottom                          = Version source
+      depForServer Top                             = error "top is no dependency"
+  in Response server (map depForServer deps)
+makeResponse _ _ _ = error "Cannot make request"

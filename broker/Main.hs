@@ -15,9 +15,9 @@ import           Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Text as T
 
-import           Monto.ServerDependency (Server,ServerDependency(..))
 import           Monto.Broker (Broker,Response)
 import qualified Monto.Broker as B
+import           Monto.DependencyManager (Dependency(..),Server(..))
 import           Monto.VersionMessage (VersionMessage)
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.VersionMessage as V
@@ -31,7 +31,7 @@ data Options = Options
   { debug   :: Bool
   , sink    :: Addr
   , source  :: Addr
-  , servers :: [(Server,[ServerDependency],Addr)]
+  , servers :: [(Server,[Dependency Server],Addr)]
   }
 
 options :: Parser Options
@@ -87,7 +87,7 @@ start = do
 
 type Sockets = Map Server (Socket Pair)
 
-withServers :: Context -> Broker -> [(Server,[ServerDependency],Addr)] -> (Broker -> Sockets -> IO b) -> IO b
+withServers :: Context -> Broker -> [(Server,[Dependency Server],Addr)] -> (Broker -> Sockets -> IO b) -> IO b
 withServers ctx b0 s k = go b0 s M.empty
   where
     go b ((server,deps,addr):rest) sockets = do
@@ -129,12 +129,12 @@ sendResponse opts sockets (B.Response server reqs) = do
   when (debug opts) $ putStrLn $ unwords ["broker",showReqs, "->", show server]
   where
     toJSON req = case req of
-      B.Version vers -> A.toJSON vers
-      B.Product prod -> A.toJSON prod
+      B.VersionMessage vers -> A.toJSON vers
+      B.ProductMessage prod -> A.toJSON prod
     showReqs = show $ flip map reqs $ \req ->
       case req of
-        B.Version ver  -> Print $ unwords ["version",T.unpack (V.source ver)]
-        B.Product prod -> Print $ concat [T.unpack (P.product prod),"/",T.unpack (P.language prod)]
+        B.VersionMessage ver  -> Print $ unwords ["version",T.unpack (V.source ver)]
+        B.ProductMessage prod -> Print $ concat [T.unpack (P.product prod),"/",T.unpack (P.language prod)]
 
 data Print = Print String
 instance Show Print where

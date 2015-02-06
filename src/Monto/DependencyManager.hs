@@ -1,4 +1,7 @@
+{-# LANGUAGE FlexibleInstances #-}
 module Monto.DependencyManager where
+
+import           Control.Monad (guard)
 
 import           Data.List (mapAccumR)
 import           Data.Graph.Inductive (Gr,Node)
@@ -6,9 +9,10 @@ import qualified Data.Graph.Inductive as G
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Set (Set)
---import qualified Data.Set as S
 import           Data.Maybe (fromJust)
+import qualified Data.Text as T
 
+import           Monto.Types
 import           Monto.Automaton (Automaton(..),L)
 import qualified Monto.Automaton as A
 
@@ -17,6 +21,33 @@ data Dependency dep
   | Bottom
   | Top
   deriving (Eq,Ord,Show)
+
+data ProductDependency
+  = Version Source
+  | Product (Source,Language,Product)
+  deriving (Eq,Ord,Show)
+
+data Server = Server Product Language
+  deriving (Eq,Ord,Show)
+
+instance Read dep => Read (Dependency dep) where
+  readsPrec p r = do
+    (a,r') <- lex r
+    if a == "Source"
+      then return (Bottom,r')
+      else do
+        (dep,r'')<- readsPrec p r
+        return (Dependency dep,r'')
+
+instance Read Server where
+  readsPrec _ r = do
+    (a,r') <- lex r
+    (b,r'') <- lex r'
+    (c,r''') <- lex r''
+    guard $ b == "/"
+    return (Server (T.pack a) (T.pack c),r''')
+
+data Response = Response Server [ProductDependency]
 
 data DependencyManager dep
   = DependencyManager
@@ -38,10 +69,10 @@ empty = DependencyManager
       }
   }
 
-register :: Ord dep => dep -> [dep] -> DependencyManager dep -> DependencyManager dep
+register :: Ord dep => dep -> [Dependency dep] -> DependencyManager dep -> DependencyManager dep
 {-# INLINE register #-}
 register from to manager =
-  let (manager',fromNode) = registerDependency manager from
+  let (manager',fromNode) = registerDependency manager (Dependency from)
       (manager'',toNodes)  = mapAccumR registerDependency manager' to
       dependencies' = G.insNodes [(1,Top)]
                     $ G.insEdges [(fromNode,toNode,()) | toNode <- toNodes]
@@ -54,15 +85,15 @@ register from to manager =
     , automaton    = auto
     }
 
-registerDependency :: Ord dep => DependencyManager dep -> dep -> (DependencyManager dep,Node)
+registerDependency :: Ord dep => DependencyManager dep -> Dependency dep -> (DependencyManager dep,Node)
 {-# INLINE registerDependency #-}
 registerDependency manager dep =
-  case M.lookup (Dependency dep) (nodeMap manager) of
+  case M.lookup dep (nodeMap manager) of
     Just node -> (manager,node)
     Nothing   ->
       let manager' = manager
-            { nodeMap      = M.insert (Dependency dep) newNode (nodeMap manager)
-            , dependencies = G.insNode (newNode,Dependency dep) (dependencies manager)
+            { nodeMap      = M.insert dep newNode (nodeMap manager)
+            , dependencies = G.insNode (newNode,dep) (dependencies manager)
             , maxNode      = newNode
             }
       in (manager',newNode)
@@ -78,9 +109,9 @@ updateAutomaton gr =
       let (Just (_,_,a,out),_) = G.match n gr
       in (a,[ fromJust (G.lab gr o) | (_,o) <- out ])
 
-lookupDependencies :: Ord dep => Dependency dep -> DependencyManager dep -> Maybe [Dependency dep]
+lookupDependencies :: Ord dep => Dependency dep -> DependencyManager dep -> [Dependency dep]
 lookupDependencies dep manager =
   let depNode = nodeMap manager M.! dep
-  in sequence $ do
+  in do
     successor <- G.suc (dependencies manager) depNode
-    return $ G.lab (dependencies manager) successor
+    return $ fromJust $ G.lab (dependencies manager) successor
