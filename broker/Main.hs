@@ -123,7 +123,7 @@ sendResponses opts sockets = mapM_ (sendResponse opts sockets)
 
 sendResponse :: Options -> Sockets -> Response -> IO ()
 {-# INLINE sendResponse #-}
-sendResponse opts sockets (B.Response server reqs) = do
+sendResponse opts sockets (B.Response src server reqs) = do
   let response = A.encode $ A.toJSON $ map toJSON reqs
   send' (sockets M.! server) [] response
   when (debug opts) $ putStrLn $ unwords ["broker",showReqs, "->", show server]

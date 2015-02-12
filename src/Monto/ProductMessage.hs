@@ -20,7 +20,6 @@ data ProductMessage =
     , language     :: Language
     , contents     :: Text
     , dependencies :: Maybe (Vector ProductDependency)
-    , invalid      :: Maybe (Vector Invalid)
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
@@ -33,7 +32,7 @@ productDependencies :: ProductMessage -> Vector ProductDependency
 productDependencies = fromMaybe V.empty . dependencies
 
 instance Show ProductMessage where
-  show (ProductMessage i j s p l _ _ _) =
+  show (ProductMessage i j s p l _ _) =
     concat [ "{", show i
            , ",", show j
            , ",", T.unpack s

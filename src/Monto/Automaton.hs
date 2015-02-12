@@ -20,7 +20,11 @@ data Automaton state input output = Automaton
   } deriving (Eq,Show)
 
 data L = Bottom | Top
-  deriving (Show,Eq,Ord)
+  deriving (Eq,Ord)
+
+instance Show L where
+  show Bottom = "⊥"
+  show Top = "⊤"
 
 buildAutomaton :: (Ord p) => p -> [p]-> Automaton (Map p L) p (Set p)
 buildAutomaton pr requirements = Automaton
@@ -147,7 +151,10 @@ compileAutomaton auto = CompiledAutomaton
 data Process state input output = Process
   { currentState :: state
   , automaton    :: CompiledAutomaton state input output
-  } deriving (Eq,Show)
+  } deriving (Eq)
+
+instance Show s => Show (Process s i o) where
+  show = show . currentState
 
 start :: CompiledAutomaton state input output -> Process state input output
 {-# INLINE start #-}
@@ -171,15 +178,39 @@ finished :: Ord s => Process s i o -> Bool
 {-# INLINE finished #-}
 finished p = currentState p `S.member` final (automaton p)
   
-toDot :: (Show s, Show i,Show o) => CompiledAutomaton s i o -> Text
+toDot :: (Show d, Show i, Show o, Ord i, Ord d)
+      => Automaton (Map d L) i o -> Text
 toDot auto = T.unlines $
-  ["digraph G {"] ++ transitionsToDot auto ++ ["}"]
-
-transitionsToDot :: (Show s, Show i,Show o) => CompiledAutomaton s i o -> [Text]
-transitionsToDot auto = do
-  ((s,i),(s',o)) <- M.toList (transition auto)
-  return $ T.unwords [ state s, " -> ", state s', T.concat ["[ label = \"", tshow i, ",", tshow o, "\" ]"]]
+  ["digraph G {"] ++ stateToDot ++ transitionsToDot ++ ["}"]
   where
-    state s = T.pack ("S" ++ show s)
+    state s = T.pack ("S" ++ show (stateEncoding s))
     tshow :: Show x => x -> Text
     tshow = T.filter (/= '\"') . T.replace "fromList " "" . T.pack . show
+    sts = M.fromList (zip (states auto) [(1::Int) ..])
+    stateEncoding s = sts M.! s
+    trans = M.fromList [ ((s,i),(s',o)) | (s,i,s',o) <- transitions auto ]
+
+    transitionsToDot = do
+      ((s,i),(s',o)) <- M.toList trans
+      return $ T.unwords [ state s, "->", state s', T.concat ["[ label = \"", tshow i, ",", tshow o, "\" ];"]]
+
+    stateToDot = do
+      s <- states auto
+      return $ T.unwords [ state s,
+                  T.concat [ "["
+                           , "label = \"", (T.pack (show (M.toList s))), "\", "
+                           , "shape = box"
+                           , "];"]]
+  
+-- toDot' :: (Show s, Show i,Show o) => CompiledAutomaton s i o -> Text
+-- toDot' auto = T.unlines $
+--   ["digraph G {"] ++ transitionsToDot auto ++ ["}"]
+-- 
+-- transitionsToDot' :: (Show s, Show i,Show o) => CompiledAutomaton s i o -> [Text]
+-- transitionsToDot' auto = do
+--   ((s,i),(s',o)) <- M.toList (transition auto)
+--   return $ T.unwords [ state s, " -> ", state s', T.concat ["[ label = \"", tshow i, ",", tshow o, "\" ]"]]
+--   where
+--     state s = T.pack ("S" ++ show s)
+--     tshow :: Show x => x -> Text
+--     tshow = T.filter (/= '\"') . T.replace "fromList " "" . T.pack . show

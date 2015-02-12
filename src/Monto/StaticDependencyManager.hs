@@ -7,7 +7,8 @@ module Monto.StaticDependencyManager
   , register
   , newVersion
   , newProduct
-  , Response(..)
+  , automatonToDot
+  , lookupDependencies
   ) where
 
 import           Data.Map (Map)
@@ -15,6 +16,7 @@ import qualified Data.Map as M
 import           Data.Maybe (fromMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Data.Text (Text)
 
 import           Monto.Types
 import           Monto.Automaton (Process,L)
@@ -72,8 +74,16 @@ newProduct pr manager =
 makeResponse :: StaticDependencyManager -> Source -> Dep -> Response
 makeResponse manager source s@(Dependency server) =
   let deps = D.lookupDependencies s (dependencyMgr manager)
-      depForServer (Dependency (Server prod lang)) = Product (source,prod,lang)
-      depForServer Bottom                          = Version source
-      depForServer Top                             = error "top is no dependency"
-  in Response server (map depForServer deps)
+  in Response source server (map (depForServer source) deps)
 makeResponse _ _ _ = error "Cannot make request"
+
+lookupDependencies :: Source -> Server -> StaticDependencyManager -> [ProductDependency]
+lookupDependencies src srv = map (depForServer src) . D.lookupDependencies (Dependency srv) . dependencyMgr
+
+depForServer :: Source -> Dep -> ProductDependency
+depForServer source (Dependency (Server prod lang)) = Product (source,prod,lang)
+depForServer source Bottom                          = Version source
+depForServer _      Top                             = error "top is no dependency"
+
+automatonToDot :: StaticDependencyManager -> Text
+automatonToDot = D.automatonToDot . dependencyMgr
