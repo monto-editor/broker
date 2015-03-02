@@ -1,15 +1,13 @@
 name:                monto-broker
 version:             0.0.1
--- synopsis:            
--- description:         
+synopsis:            Haskell Broker for Monto that implements Service Dependencies.   
+description:         
 license:             BSD3
 license-file:        LICENSE
 author:              Sven Keidel
 maintainer:          svenkeidel@googlemail.com
--- copyright:           
 category:            Editor
 build-type:          Simple
--- extra-source-files:  
 cabal-version:       >=1.10
 
 
@@ -38,8 +36,6 @@ library
 
 executable broker
   main-is:             Main.hs
-  -- other-modules:       
-  -- other-extensions:    
   ghc-options:         -Wall -threaded
   build-depends:       base,
                        aeson,
