@@ -9,9 +9,13 @@ produces ASTs.
 Build Instructions
 ------------------
 
-1. Get the [Haskell Platform](https://www.haskell.org/downloads)
+1. Build Requirements:
+    * [Haskell Platform](https://www.haskell.org/downloads)
+    * ZeroMQ 4
+    * pkgconfig
 2. Update the local repository of cabal, install the dependencies of the
    project and build the project.
+
    ```shell
    $ cd monto-broker
    $ cabal update
@@ -19,6 +23,7 @@ Build Instructions
    $ cabal install --dependencies-only
    $ cabal build
    ```
+
 3. Start the broker with `./start.sh`
 
 Building the Broker using Docker
