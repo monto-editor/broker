@@ -17,9 +17,7 @@ library
                        Monto.ProductMessage,
                        Monto.ProductDependency,
                        Monto.ServerDependency
-                       Monto.StaticDependencyManager,
-                       Monto.DynamicDependencyManager,
-                       Monto.DependencyManager,
+                       Monto.DependencyGraph,
                        Monto.ResourceManager,
                        Monto.Automaton,
                        Monto.Automaton.Compiled

@@ -15,9 +15,8 @@ import           Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Text as T
 
-import           Monto.Broker (Broker,Response)
+import           Monto.Broker (Broker,Response,Server,ServerDependency)
 import qualified Monto.Broker as B
-import           Monto.DependencyManager (Dependency(..),Server(..))
 import           Monto.VersionMessage (VersionMessage)
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.VersionMessage as V
@@ -31,7 +30,7 @@ data Options = Options
   { debug   :: Bool
   , sink    :: Addr
   , source  :: Addr
-  , servers :: [(Server,[Dependency Server],Addr)]
+  , servers :: [(Server,[ServerDependency],Addr)]
   }
 
 options :: Parser Options
@@ -87,7 +86,7 @@ start = do
 
 type Sockets = Map Server (Socket Pair)
 
-withServers :: Context -> Broker -> [(Server,[Dependency Server],Addr)] -> (Broker -> Sockets -> IO b) -> IO b
+withServers :: Context -> Broker -> [(Server,[ServerDependency],Addr)] -> (Broker -> Sockets -> IO b) -> IO b
 withServers ctx b0 s k = go b0 s M.empty
   where
     go b ((server,deps,addr):rest) sockets = do
@@ -96,7 +95,7 @@ withServers ctx b0 s k = go b0 s M.empty
           putStrLn $ unwords ["couldn't bind address", addr, "for server", show server]
           throw e
         putStrLn $ unwords ["listen on address", addr, "for", show server]
-        go (B.register server deps b) rest (M.insert server sckt sockets)
+        go (B.registerServer server deps b) rest (M.insert server sckt sockets)
     go b [] sockets = k b sockets
 
 main :: IO ()
