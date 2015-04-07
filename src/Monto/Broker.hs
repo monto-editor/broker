@@ -12,6 +12,7 @@ module Monto.Broker
   , Dependency(..)
   , Server(..)
   , ServerDependency
+  , ProductDependency(..)
   )
   where
 
@@ -147,17 +148,19 @@ newVersion version broker =
 
 newProduct :: ProductMessage -> Broker -> ([Response],Broker)
 {-# INLINE newProduct #-}
-newProduct pr broker =
-  let process = fromMaybe (A.start (A.compileAutomaton (automaton broker)))
-              $ M.lookup (P.source pr)
-              $ processes broker
-      (res,process') = fromMaybe (S.empty,process)
-                     $ A.runProcess (Dependency (Server (P.product pr) (P.language pr))) process
-      broker' = broker
-        { resourceMgr = snd $ R.updateProduct' pr $ resourceMgr broker
-        , processes   = M.insert (P.product pr) process' (processes broker)
-        }
-  in (map (makeResponse broker' (P.source pr)) (S.toList res),broker')
+newProduct pr broker
+  | R.isOutdated pr (resourceMgr broker) = ([],broker)
+  | otherwise =
+    let process = fromMaybe (A.start (A.compileAutomaton (automaton broker)))
+                $ M.lookup (P.source pr)
+                $ processes broker
+        (res,process') = fromMaybe (S.empty,process)
+                       $ A.runProcess (Dependency (Server (P.product pr) (P.language pr))) process
+        broker' = broker
+          { resourceMgr = snd $ R.updateProduct' pr $ resourceMgr broker
+          , processes   = M.insert (P.product pr) process' (processes broker)
+          }
+    in (map (makeResponse broker' (P.source pr)) (S.toList res),broker')
 
 makeResponse :: Broker -> Source -> ServerDependency -> Response
 {-# INLINE makeResponse #-}

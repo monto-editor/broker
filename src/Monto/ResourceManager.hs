@@ -1,6 +1,7 @@
 module Monto.ResourceManager
   ( ResourceManager
   , empty
+  , isOutdated
   , updateVersion
   , updateProduct
   , updateProduct'
@@ -36,6 +37,11 @@ data ResourceManager = ResourceManager
 empty :: ResourceManager
 {-# INLINE empty #-}
 empty = ResourceManager M.empty M.empty G.empty 0
+
+isOutdated :: ProductMessage -> ResourceManager -> Bool
+isOutdated pr resourceMgr = fromMaybe True $ do
+  (v,_) <- M.lookup (P.source pr) (versions resourceMgr)
+  return $ P.versionId pr < V.versionId v
 
 updateVersion :: VersionMessage -> ResourceManager -> (Vector Invalid,ResourceManager)
 {-# INLINE updateVersion #-}
@@ -74,13 +80,6 @@ removeOldDependencies :: ProductDependency -> ResourceManager -> (Vector Invalid
 {-# INLINE removeOldDependencies #-}
 removeOldDependencies dep resourceMgr = fromMaybe (V.empty,resourceMgr) $ do
   let rdeps = reverseDependencies dep resourceMgr
-  {-old <- case dep of-}
-    {-Version (_,s,_) -> do-}
-      {-node <- M.lookup s (versions resourceMgr)-}
-      {-G.lab (dependencies resourceMgr) node-}
-    {-Product (_,_,s,l,p) -> do-}
-      {-node <- M.lookup (s,l,p) (products resourceMgr)-}
-      {-G.lab (dependencies resourceMgr) node-}
   let invalid = V.fromList $ rdeps
   return (invalid,F.foldr removeProductDependency resourceMgr invalid)
 
