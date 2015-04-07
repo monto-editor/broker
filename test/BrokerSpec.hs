@@ -59,7 +59,6 @@ spec = do
           ]
 
         -- outdated product arrives
-        
         B.newProduct (astMsg outdatedId 1 "s1") `shouldBe'` []
 
       return ()
