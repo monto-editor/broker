@@ -10,7 +10,10 @@ Build Instructions
 ------------------
 
 1. Build Requirements:
-    * [Haskell Platform](https://www.haskell.org/downloads)
+    * [Haskell Platform 2014](https://www.haskell.org/platform).
+      This includes:
+        - GHC 7.8.3
+        - Cabal 1.18
     * ZeroMQ 4
     * pkgconfig
 2. Update the local repository of cabal, install the dependencies of the
