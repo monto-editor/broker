@@ -7,9 +7,11 @@ import           System.Posix.Signals (installHandler, Handler(Catch), sigINT, s
 --import           Control.Applicative
 import           Control.Concurrent
 import           Control.Monad
-import           Control.Exception (throw,catch,SomeException)
+import           Control.Exception
 
 import qualified Data.Aeson as A
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy.Char8 as BSL
 import           Data.Foldable (for_)
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -63,7 +65,6 @@ runZeroMQ opts = do
         bind snk $ fromJust (sink opts)
         putStrLn $ unwords ["publish all products to sink on address", show $ sink opts]
 
-
         withServers ctx B.empty (servers opts) $ \b0 sockets -> do
 
           broker <- newMVar b0
@@ -92,41 +93,39 @@ runZeroMQ opts = do
 
 runWebSockets :: Options -> IO()
 runWebSockets opts = do
-    WS.runServer "0.0.0.0" (read (fromJust (source opts)) :: Int) $ \srcSock -> do
-      src <- WS.acceptRequest srcSock
-      putStrLn $ unwords ["listen on address", show $ source opts, "for versions"]
+  withContext $ \ctx ->
+    withServers ctx B.empty (servers opts) $ \b0 sockets -> do
+      broker <- newMVar b0
+      interrupted <- newEmptyMVar
 
-      WS.runServer "0.0.0.0" (read (fromJust (sink opts)) :: Int) $ \snkSock -> do
-        snk <- WS.acceptRequest snkSock
-        putStrLn $ unwords ["publish all products to sink on address", show $ sink opts]
+      WS.runServer "127.0.0.1" (read (fromJust (source opts)) :: Int) $ \srcSock -> do
+        src <- WS.acceptRequest srcSock
+        putStrLn $ unwords ["listen on address", show $ source opts, "for versions"]
 
-        withContext $ \ctx -> do
-          withServers ctx B.empty (servers opts) $ \b0 sockets -> do
+        WS.runServer "127.0.0.1" (read (fromJust (sink opts)) :: Int) $ \snkSock -> do
+          snk <- WS.acceptRequest snkSock
+          putStrLn $ unwords ["publish all products to sink on address", show $ sink opts]
 
-            broker <- newMVar b0
-            interrupted <- newEmptyMVar
-
-            let stopExcecution = putMVar interrupted Interrupted
-            _ <- installHandler sigINT  (Catch stopExcecution) Nothing
-            _ <- installHandler sigTERM (Catch stopExcecution) Nothing
-
-            sourceThread <- forkIO $ forever $ do
-              msg <- A.decodeStrict <$> WS.receiveData src
-              putStrLn (show msg)
+          sourceThread <- forkIO $ forever $ do
+            wsMsg <- (WS.receiveData src :: IO BSL.ByteString)
+            msg <- A.decodeStrict <$> evaluate (toStrict wsMsg)
+            for_ msg $ \msg' -> do
+              when (debug opts) $ putStrLn $ unwords ["version", T.unpack (V.source msg'),"->", "broker"]
+              modifyMVar_ broker $ onVersionMessage opts msg' sockets
+          threads <- forM (M.toList sockets) $ \(server,sckt) ->
+            forkIO $ forever $ do
+              rawMsg <- receive sckt
+              WS.sendBinaryData snk rawMsg
+              let msg = A.decodeStrict rawMsg
               for_ msg $ \msg' -> do
-                when (debug opts) $ putStrLn $ unwords ["version", T.unpack (V.source msg'),"->", "broker"]
-                modifyMVar_ broker $ onVersionMessage opts msg' sockets
-            threads <- forM (M.toList sockets) $ \(server,sckt) ->
-              forkIO $ forever $ do
-                rawMsg <- receive sckt
-                WS.sendBinaryData snk rawMsg
-                let msg = A.decodeStrict rawMsg
-                for_ msg $ \msg' -> do
-                  when (debug opts) $ putStrLn $ unwords [show server, T.unpack (P.source msg'), "->", "broker"]
-                  modifyMVar_ broker $ onProductMessage opts msg' sockets
-            _ <- readMVar interrupted
-            killThread sourceThread
-            forM_ threads killThread
+                when (debug opts) $ putStrLn $ unwords [show server, T.unpack (P.source msg'), "->", "broker"]
+                modifyMVar_ broker $ onProductMessage opts msg' sockets
+          _ <- readMVar interrupted
+          killThread sourceThread
+          forM_ threads killThread
+
+toStrict :: BSL.ByteString -> BS.ByteString
+toStrict = BS.concat . BSL.toChunks
 
 type Sockets = Map Server (Socket Pair)
 

@@ -22,6 +22,7 @@ library
                        Monto.Automaton
   build-depends:       base,
                        aeson,
+                       bytestring,
                        containers,
                        fgl,
                        semigroups,
@@ -37,6 +38,7 @@ executable broker
   ghc-options:         -Wall -threaded
   build-depends:       base,
                        aeson,
+                       bytestring,
                        containers,
                        fgl,
                        monto-broker,
@@ -55,6 +57,7 @@ test-suite specs
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base,
+                       bytestring,
                        QuickCheck,
                        containers,
                        fgl,
