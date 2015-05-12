@@ -115,7 +115,7 @@ runWebSockets opts = do
           threads <- forM (M.toList sockets) $ \(server,sckt) ->
             forkIO $ forever $ do
               rawMsg <- receive sckt
-              WS.sendBinaryData snk rawMsg
+              WS.sendTextData snk rawMsg
               let msg = A.decodeStrict rawMsg
               for_ msg $ \msg' -> do
                 when (debug opts) $ putStrLn $ unwords [show server, T.unpack (P.source msg'), "->", "broker"]
