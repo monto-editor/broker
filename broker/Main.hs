@@ -4,7 +4,7 @@ module Main where
 import           System.ZMQ4 hiding (message,source)
 import           System.Posix.Signals (installHandler, Handler(Catch), sigINT, sigTERM)
 
-import           Control.Applicative
+--import           Control.Applicative
 import           Control.Concurrent
 import           Control.Monad
 import           Control.Exception (throw,catch,SomeException)

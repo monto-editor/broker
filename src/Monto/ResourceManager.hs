@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Monto.ResourceManager
   ( ResourceManager
   , empty
@@ -12,7 +13,9 @@ module Monto.ResourceManager
 
 import           Data.Map (Map)
 import qualified Data.Map as M
+#if __GLASGOW_HASKELL__ < 710
 import           Data.Foldable (Foldable)
+#endif
 import qualified Data.Foldable as F
 import           Data.Graph.Inductive (Gr,Node)
 import qualified Data.Graph.Inductive as G

@@ -1,7 +1,6 @@
 name:                monto-broker
 version:             0.0.1
-synopsis:            Haskell Broker for Monto that implements Service Dependencies.   
-description:         
+synopsis:            Haskell Broker for Monto that implements Service Dependencies.
 license:             BSD3
 license-file:        LICENSE
 author:              Sven Keidel
@@ -20,8 +19,7 @@ library
                        Monto.ServerDependency
                        Monto.DependencyGraph,
                        Monto.ResourceManager,
-                       Monto.Automaton,
-                       Monto.Automaton.Compiled
+                       Monto.Automaton
   build-depends:       base,
                        aeson,
                        containers,

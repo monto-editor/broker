@@ -1,7 +1,12 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Monto.Automaton where
 
+
+#if __GLASGOW_HASKELL__ < 710
 import           Control.Applicative
+#endif
 import           Control.Monad hiding (when)
 
 import           Data.Semigroup
