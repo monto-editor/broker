@@ -2,7 +2,7 @@
 module Main where
 
 import           System.ZMQ4 hiding (message,source)
-import           System.Posix.Signals (installHandler, Handler(Catch), sigINT, sigTERM)
+--import           System.Posix.Signals (installHandler, Handler(Catch), sigINT, sigTERM)
 
 --import           Control.Applicative
 import           Control.Concurrent
@@ -12,6 +12,7 @@ import           Control.Exception
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BSL
+--import           Data.Either
 import           Data.Foldable (for_)
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -31,6 +32,9 @@ import           Options.Applicative
 
 type Addr = String
 
+type MontoSrc = Either WS.Connection (Socket Sub)
+type MontoSnk = Either WS.Connection (Socket Pub)
+
 data Options = Options
   { debug     :: Bool
   , websocket :: Bool
@@ -47,85 +51,81 @@ options = Options
   <*> optional    (strOption   (long "source"    <> help "address of the source"))
   <*> option auto              (long "servers"   <> help "names, their dependencies and their ports" <> metavar "[(Server,[ServerDependency],Address)]")
 
-start :: Options -> IO ()
-start opts
-  | websocket opts = runWebSockets opts
-  | otherwise = runZeroMQ opts
+main :: IO ()
+main = do
+  opts <- execParser $ info (helper <*> options)
+    ( fullDesc
+    <> progDesc "Monto Broker"
+    )
+  runServer opts
 
-runZeroMQ :: Options -> IO()
-runZeroMQ opts = do
+runServer :: Options -> IO ()
+runServer opts = do
   withContext $ \ctx ->
 
-    withSocket ctx Sub $ \src -> do
-      bind src $ fromJust (source opts)
-      subscribe src ""
-      putStrLn $ unwords ["listen on address", show $ source opts, "for versions"]
-
-      withSocket ctx Pub $ \snk -> do
-        bind snk $ fromJust (sink opts)
-        putStrLn $ unwords ["publish all products to sink on address", show $ sink opts]
-
-        withServers ctx B.empty (servers opts) $ \b0 sockets -> do
-
-          broker <- newMVar b0
-          interrupted <- newEmptyMVar
-
-          let stopExcecution = putMVar interrupted Interrupted
-          _ <- installHandler sigINT  (Catch stopExcecution) Nothing
-          _ <- installHandler sigTERM (Catch stopExcecution) Nothing
-
-          sourceThread <- forkIO $ forever $ do
-            msg <- A.decodeStrict <$> receive src
-            for_ msg $ \msg' -> do
-              when (debug opts) $ putStrLn $ unwords ["version", T.unpack (V.source msg'),"->", "broker"]
-              modifyMVar_ broker $ onVersionMessage opts msg' sockets
-          threads <- forM (M.toList sockets) $ \(server,sckt) ->
-            forkIO $ forever $ do
-              rawMsg <- receive sckt
-              send snk [] rawMsg
-              let msg = A.decodeStrict rawMsg
-              for_ msg $ \msg' -> do
-                when (debug opts) $ putStrLn $ unwords [show server, T.unpack (P.source msg'), "->", "broker"]
-                modifyMVar_ broker $ onProductMessage opts msg' sockets
-          _ <- readMVar interrupted
-          killThread sourceThread
-          forM_ threads killThread
-
-runWebSockets :: Options -> IO()
-runWebSockets opts = do
-  withContext $ \ctx ->
     withServers ctx B.empty (servers opts) $ \b0 sockets -> do
       broker <- newMVar b0
       interrupted <- newEmptyMVar
 
-      WS.runServer "127.0.0.1" (read (fromJust (source opts)) :: Int) $ \srcSock -> do
-        src <- WS.acceptRequest srcSock
-        putStrLn $ unwords ["listen on address", show $ source opts, "for versions"]
+      if websocket opts
+        then
+          WS.runServer "127.0.0.1" (read (fromJust (source opts)) :: Int) $ \srcSock -> do
+            src <- WS.acceptRequest srcSock
+            putStrLn srcMsg
 
-        WS.runServer "127.0.0.1" (read (fromJust (sink opts)) :: Int) $ \snkSock -> do
-          snk <- WS.acceptRequest snkSock
-          putStrLn $ unwords ["publish all products to sink on address", show $ sink opts]
+            WS.runServer "127.0.0.1" (read (fromJust (sink opts)) :: Int) $ \snkSock -> do
+              snk <- WS.acceptRequest snkSock
+              putStrLn snkMsg
+              handleIO (Left src) (Left snk) sockets opts broker interrupted
+        else
+          withSocket ctx Sub $ \src -> do
+            bind src $ fromJust (source opts)
+            subscribe src ""
+            putStrLn srcMsg
 
-          sourceThread <- forkIO $ forever $ do
-            wsMsg <- (WS.receiveData src :: IO BSL.ByteString)
-            msg <- A.decodeStrict <$> evaluate (toStrict wsMsg)
-            for_ msg $ \msg' -> do
-              when (debug opts) $ putStrLn $ unwords ["version", T.unpack (V.source msg'),"->", "broker"]
-              modifyMVar_ broker $ onVersionMessage opts msg' sockets
-          threads <- forM (M.toList sockets) $ \(server,sckt) ->
-            forkIO $ forever $ do
-              rawMsg <- receive sckt
-              WS.sendTextData snk rawMsg
-              let msg = A.decodeStrict rawMsg
-              for_ msg $ \msg' -> do
-                when (debug opts) $ putStrLn $ unwords [show server, T.unpack (P.source msg'), "->", "broker"]
-                modifyMVar_ broker $ onProductMessage opts msg' sockets
-          _ <- readMVar interrupted
-          killThread sourceThread
-          forM_ threads killThread
+            withSocket ctx Pub $ \snk -> do
+              bind snk $ fromJust (sink opts)
+              putStrLn snkMsg
+              handleIO (Right src) (Right snk) sockets opts broker interrupted
+      where
+        srcMsg = unwords ["listen on address", show $ source opts, "for versions"]
+        snkMsg = unwords ["publish all products to sink on address", show $ sink opts]
 
-toStrict :: BSL.ByteString -> BS.ByteString
-toStrict = BS.concat . BSL.toChunks
+handleIO :: MontoSrc -> MontoSnk -> Sockets -> Options -> MVar Broker -> MVar t -> IO ()
+handleIO src snk sockets opts broker interrupted = do
+  sourceThread <- forkIO $ forever $ do
+    msg <- A.decodeStrict <$> (either receiveFromWS receiveFromZMQ src)
+    for_ msg $ \msg' -> do
+      when (debug opts) $ putStrLn $ unwords ["version", T.unpack (V.source msg'),"->", "broker"]
+      modifyMVar_ broker $ onVersionMessage opts msg' sockets
+  threads <- forM (M.toList sockets) $ \(server,sckt) ->
+    forkIO $ forever $ do
+      rawMsg <- receive sckt
+      either (sendToWS rawMsg) (sendToZMQ rawMsg) snk
+      let msg = A.decodeStrict rawMsg
+      for_ msg $ \msg' -> do
+        when (debug opts) $ putStrLn $ unwords [show server, T.unpack (P.source msg'), "->", "broker"]
+        modifyMVar_ broker $ onProductMessage opts msg' sockets
+  _ <- readMVar interrupted
+  killThread sourceThread
+  forM_ threads killThread
+
+receiveFromWS :: WS.Connection -> IO BS.ByteString
+receiveFromWS src = do
+  wsMsg <- (WS.receiveData src :: IO BSL.ByteString)
+  evaluate $ BS.concat $ BSL.toChunks wsMsg
+
+receiveFromZMQ :: Socket Sub -> IO BS.ByteString
+receiveFromZMQ src =
+  receive src
+
+sendToWS :: BS.ByteString -> WS.Connection -> IO ()
+sendToWS rawMsg snk =
+  WS.sendTextData snk rawMsg
+
+sendToZMQ :: BS.ByteString -> Socket Pub -> IO ()
+sendToZMQ rawMsg snk =
+  send snk [] rawMsg
 
 type Sockets = Map Server (Socket Pair)
 
@@ -140,14 +140,6 @@ withServers ctx b0 s k = go b0 s M.empty
         putStrLn $ unwords ["listen on address", addr, "for", show server]
         go (B.registerServer server deps b) rest (M.insert server sckt sockets)
     go b [] sockets = k b sockets
-
-main :: IO ()
-main = do
-  opts <- execParser $ info (helper <*> options)
-    ( fullDesc
-    <> progDesc "Monto Broker"
-    )
-  start opts
 
 onVersionMessage :: Options -> VersionMessage -> Sockets -> Broker -> IO Broker
 {-# INLINE onVersionMessage #-}
@@ -170,7 +162,7 @@ sendResponses opts sockets = mapM_ (sendResponse opts sockets)
 
 sendResponse :: Options -> Sockets -> Response -> IO ()
 {-# INLINE sendResponse #-}
-sendResponse opts sockets (B.Response src server reqs) = do
+sendResponse opts sockets (B.Response _ server reqs) = do
   let response = A.encode $ A.toJSON $ map toJSON reqs
   send' (sockets M.! server) [] response
   when (debug opts) $ putStrLn $ unwords ["broker",showReqs, "->", show server]
