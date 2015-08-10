@@ -3,15 +3,19 @@
 {-# LANGUAGE TupleSections #-}
 module Monto.Broker
   ( empty
+  , printBroker
+  , registerService
+  , deregisterService
   , registerServer
   , registerProductDep
-  , Broker
+  , Broker(..)
   , newVersion
   , newProduct
   , Response (..)
   , Message (..)
   , Dependency(..)
   , Server(..)
+  , Service(..)
   , ServerDependency
   , ProductDependency(..)
   )
@@ -28,6 +32,7 @@ import           Control.Monad (guard)
 import           Data.Maybe (fromJust,fromMaybe,isJust,catMaybes)
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.List as List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Set (Set)
@@ -37,7 +42,7 @@ import qualified Data.Graph.Inductive as G
 
 import           Monto.Automaton (Automaton(..),L,Process)
 import qualified Monto.Automaton as A
-import           Monto.Types (Source,Language,Product)
+import           Monto.Types (Source,Language,Product,Port,ServiceID)
 import           Monto.VersionMessage (VersionMessage)
 import           Monto.ProductMessage (ProductMessage)
 import           Monto.ResourceManager (ResourceManager)
@@ -64,7 +69,7 @@ data Server = Server Product Language
   deriving (Eq,Ord)
 
 instance Show Server where
-  show (Server p l) = concat [ T.unpack p, "/", T.unpack l ]
+  show (Server pr l) = concat [ T.unpack pr, "/", T.unpack l ]
 
 instance Read Server where
   readsPrec _ r = do
@@ -73,6 +78,16 @@ instance Read Server where
     (c,r''') <- lex r''
     guard $ b == "/"
     return (Server (T.pack a) (T.pack c),r''')
+
+data Service = Service
+  { server :: Server
+  , serviceID :: ServiceID
+  , port :: Port
+  }
+  deriving (Eq,Ord)
+
+instance Show Service where
+  show (Service server serviceID port) = concat [show server, "/", T.unpack serviceID, "/", show port]
 
 type ServerDependency = Dependency Server
 
@@ -88,6 +103,8 @@ data Broker = Broker
   , productDependencies :: DependencyGraph ProductDependency
   , automaton           :: Automaton (Map ServerDependency L) ServerDependency (Set ServerDependency)
   , processes           :: Map Source (Process (Map ServerDependency L) ServerDependency (Set ServerDependency))
+  , servers             :: [Service]
+  , freePorts           :: [Port]
   } deriving (Eq,Show)
 
 empty :: Broker
@@ -102,7 +119,14 @@ empty = Broker
       , accepting    = []
       }
   , processes = M.empty
+  , servers = []
+  , freePorts = [5010..5020]
   }
+
+printBroker :: Broker -> IO()
+printBroker broker = do
+  putStrLn $ show (servers broker)
+  putStrLn $ show (freePorts broker)
 
 registerServer :: Server -> [ServerDependency] -> Broker -> Broker
 {-# INLINE registerServer #-}
@@ -111,6 +135,27 @@ registerServer server deps broker =
   in broker
   { serviceDependencies = serviceDependencies'
   , automaton = updateAutomaton (DG.dependencies serviceDependencies')
+  }
+
+registerService :: Server -> ServiceID -> Broker -> IO Broker
+{-# INLINE registerService #-}
+registerService server serviceID broker =
+  let freePorts' = (tail (freePorts broker))
+      servers' = List.insert (Service server serviceID (head (freePorts broker))) (servers broker)
+  in return broker
+  { servers = servers'
+  , freePorts = freePorts'
+  }
+
+deregisterService :: ServiceID -> Broker -> IO Broker
+{-# INLINE deregisterService #-}
+deregisterService serviceID broker =
+  let service = head (List.filter (\(Service _ serviceID' _) -> serviceID' == serviceID) (servers broker))
+      servers' = List.delete service (servers broker)
+      freePorts' = List.insert (port service) (freePorts broker)
+  in return broker
+  { servers = servers'
+  , freePorts = freePorts'
   }
 
 registerProductDep :: ProductDependency -> [ProductDependency] -> Broker -> ([Source],Broker)

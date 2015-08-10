@@ -19,7 +19,11 @@ library
                        Monto.ServerDependency
                        Monto.DependencyGraph,
                        Monto.ResourceManager,
-                       Monto.Automaton
+                       Monto.Automaton,
+                       Monto.DeregisterService,
+                       Monto.RegisterServiceRequest,
+                       Monto.RegisterServiceResponse,
+                       Monto.Types
   build-depends:       base,
                        aeson,
                        bytestring,
