@@ -20,6 +20,7 @@ import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
 import qualified Data.Text as T
+import qualified Data.Vector as Vector
 --import qualified Data.Text.Encoding as TE
 
 import           Monto.Broker (Broker,Response,Server,ServerDependency,Service)
@@ -32,6 +33,8 @@ import qualified Monto.RegisterServiceRequest as RQ
 import qualified Monto.RegisterServiceResponse as RS
 import qualified Monto.DeregisterService as D
 import           Monto.Types (ServiceID)
+import           Monto.DependencyGraph (DependencyGraph,Dependency(..))
+import qualified Monto.DependencyGraph as DG
 
 import qualified Network.WebSockets as WS
 
@@ -48,7 +51,6 @@ data Options = Options
   , sink          :: Addr
   , source        :: Addr
   , registration  :: Addr
-  , servers       :: [(Server,[ServerDependency],Addr,ServiceID)]
   }
 
 options :: Parser Options
@@ -58,7 +60,6 @@ options = Options
   <*> strOption   (long "sink"         <> help "address of the sink")
   <*> strOption   (long "source"       <> help "address of the source")
   <*> strOption   (long "registration" <> help "address for service registration")
-  <*> option auto (long "servers"      <> help "names, their dependencies and their ports" <> metavar "[(Server,[ServerDependency],Address,ServiceID)]")
 
 main :: IO ()
 main = do
@@ -140,27 +141,29 @@ runBroker opts ctx src snk interrupted =
           let fr = fromJust r
           putStrLn $ unwords ["register", T.unpack (RQ.registerServiceID fr), "->", "broker"]
           modifyMVar_ broker (B.registerService (B.Server (RQ.product fr) (RQ.language fr)) (RQ.registerServiceID fr))
+          modifyMVar_ broker (B.registerServer (B.Server (RQ.product fr) (RQ.language fr)) (map read (Vector.toList $ fromJust (RQ.dependencies fr))))
           b <- readMVar broker
           let service = head (List.filter (\(B.Service _ serviceID _) -> serviceID == (RQ.registerServiceID fr)) (B.servers b))
 
-          Z.withSocket ctx Z.Pair $ \sckt -> do
-            Z.bind sckt ("tcp://*:" ++ (show (B.port service))) `catch` \(e :: SomeException) -> do
-              putStrLn $ unwords ["couldn't bind address", "tcp://*:", show (B.port service), "for server", show (B.server service)]
-              throw e
-            putStrLn $ unwords ["listen on address", "tcp://*:", show (B.port service), "for", show (B.server service)]
-            modifyMVar_ sockets $ myInsert (B.server service) sckt
-            modifyMVar_ services $ myInsert (RQ.registerServiceID fr) sckt
+          _ <-forkIO $
+            Z.withSocket ctx Z.Pair $ \sckt -> do
+              Z.bind sckt ("tcp://*:" ++ (show (B.port service))) `catch` \(e :: SomeException) -> do
+                putStrLn $ unwords ["couldn't bind address", "tcp://*:", show (B.port service), "for server", show (B.server service)]
+                throw e
+              putStrLn $ unwords ["listen on address", "tcp://*:" ++ show (B.port service), "for", show (B.server service)]
+              modifyMVar_ sockets $ myInsert (B.server service) sckt
+              modifyMVar_ services $ myInsert (RQ.registerServiceID fr) sckt
 
-            thread <- forkIO $ forever $ do
-              rawMsg' <- Z.receive sckt
-              either (sendToWS rawMsg) (sendToZMQ rawMsg') snk
-              let msg = A.decodeStrict rawMsg
-              for_ msg $ \msg' -> do
-                when (debug opts) $ putStrLn $ unwords [show (B.server service), T.unpack (P.source msg'), "->", "broker"]
-                sockets' <- readMVar sockets
-                modifyMVar_ broker $ onProductMessage opts msg' sockets'
---            List.insert threads thread
-            yield
+              forever $ do
+                rawMsg' <- Z.receive sckt
+                either (sendToWS rawMsg') (sendToZMQ rawMsg') snk
+                let msg = A.decodeStrict rawMsg'
+                for_ msg $ \msg' -> do
+                  when (debug opts) $ putStrLn $ unwords [show (B.server service), T.unpack (P.source msg'), "->", "broker"]
+                  sockets' <- readMVar sockets
+                  modifyMVar_ broker $ onProductMessage opts msg' sockets'
+  --            List.insert threads thread
+                yield
           Z.send registerSckt [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse (RQ.registerServiceID fr) "ok" $ Just (B.port service))))
         Nothing -> yield
 
@@ -191,18 +194,6 @@ sendToZMQ rawMsg snk =
   Z.send snk [] rawMsg
 
 type Sockets = Map Server (Socket Pair)
-
-withServers :: Context -> Broker -> [(Server,[ServerDependency],Addr,ServiceID)] -> (Broker -> Sockets -> IO b) -> IO b
-withServers ctx b0 s k = go b0 s M.empty
-  where
-    go b ((server,deps,addr,_):rest) sockets = do
-      Z.withSocket ctx Z.Pair $ \sckt -> do
-        Z.bind sckt addr `catch` \(e :: SomeException) -> do
-          putStrLn $ unwords ["couldn't bind address", addr, "for server", show server]
-          throw e
-        putStrLn $ unwords ["listen on address", addr, "for", show server]
-        go (B.registerServer server deps b) rest (M.insert server sckt sockets)
-    go b [] sockets = k b sockets
 
 onVersionMessage :: Options -> VersionMessage -> Sockets -> Broker -> IO Broker
 {-# INLINE onVersionMessage #-}

@@ -128,11 +128,11 @@ printBroker broker = do
   putStrLn $ show (servers broker)
   putStrLn $ show (freePorts broker)
 
-registerServer :: Server -> [ServerDependency] -> Broker -> Broker
+registerServer :: Server -> [ServerDependency] -> Broker -> IO Broker
 {-# INLINE registerServer #-}
 registerServer server deps broker =
   let serviceDependencies' = DG.register server deps (serviceDependencies broker)
-  in broker
+  in return broker
   { serviceDependencies = serviceDependencies'
   , automaton = updateAutomaton (DG.dependencies serviceDependencies')
   }
