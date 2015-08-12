@@ -87,7 +87,7 @@ data Service = Service
   deriving (Eq,Ord)
 
 instance Show Service where
-  show (Service server serviceID port) = concat [show server, "/", T.unpack serviceID, "/", show port]
+  show (Service server' serviceID' port') = concat [show server', "/", T.unpack serviceID', "/", show port']
 
 type ServerDependency = Dependency Server
 
@@ -130,8 +130,8 @@ printBroker broker = do
 
 registerServer :: Server -> [ServerDependency] -> Broker -> IO Broker
 {-# INLINE registerServer #-}
-registerServer server deps broker =
-  let serviceDependencies' = DG.register server deps (serviceDependencies broker)
+registerServer server' deps broker =
+  let serviceDependencies' = DG.register server' deps (serviceDependencies broker)
   in return broker
   { serviceDependencies = serviceDependencies'
   , automaton = updateAutomaton (DG.dependencies serviceDependencies')
@@ -139,9 +139,9 @@ registerServer server deps broker =
 
 registerService :: Server -> ServiceID -> Broker -> IO Broker
 {-# INLINE registerService #-}
-registerService server serviceID broker =
+registerService server' serviceID' broker =
   let freePorts' = (tail (freePorts broker))
-      servers' = List.insert (Service server serviceID (head (freePorts broker))) (servers broker)
+      servers' = List.insert (Service server' serviceID' (head (freePorts broker))) (servers broker)
   in return broker
   { servers = servers'
   , freePorts = freePorts'
@@ -149,8 +149,8 @@ registerService server serviceID broker =
 
 deregisterService :: ServiceID -> Broker -> IO Broker
 {-# INLINE deregisterService #-}
-deregisterService serviceID broker =
-  let service = head (List.filter (\(Service _ serviceID' _) -> serviceID' == serviceID) (servers broker))
+deregisterService serviceID' broker =
+  let service = head (List.filter (\(Service _ serviceID'' _) -> serviceID'' == serviceID') (servers broker))
       servers' = List.delete service (servers broker)
       freePorts' = List.insert (port service) (freePorts broker)
   in return broker
