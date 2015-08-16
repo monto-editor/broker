@@ -12,18 +12,20 @@ tested-with:         GHC == 7.8.3
 
 
 library
-  exposed-modules:     Monto.Broker,
-                       Monto.VersionMessage,
-                       Monto.ProductMessage,
-                       Monto.ProductDependency,
-                       Monto.ServerDependency
+  exposed-modules:     Monto.Automaton,
+                       Monto.Broker,
                        Monto.DependencyGraph,
-                       Monto.ResourceManager,
-                       Monto.Automaton,
                        Monto.DeregisterService,
+                       Monto.DiscoverRequest
+                       Monto.ProductDependency,
+                       Monto.ProductMessage,
                        Monto.RegisterServiceRequest,
                        Monto.RegisterServiceResponse,
-                       Monto.Types
+                       Monto.ResourceManager,
+                       Monto.ServerDependency,
+                       Monto.SubscriptionMessage,
+                       Monto.Types,
+                       Monto.VersionMessage
   build-depends:       base,
                        aeson,
                        bytestring,
@@ -31,8 +33,7 @@ library
                        fgl,
                        semigroups,
                        text,
-                       vector,
-                       websockets
+                       vector
   ghc-options:         -Wall
   hs-source-dirs:      src/
   default-language:    Haskell2010
@@ -50,7 +51,6 @@ executable broker
                        text,
                        unix,
                        vector,
-                       websockets,
                        zeromq4-haskell
   hs-source-dirs:      broker/
   default-language:    Haskell2010
@@ -69,6 +69,5 @@ test-suite specs
                        monto-broker,
                        mtl,
                        text,
-                       vector,
-                       websockets
+                       vector
   default-language:    Haskell2010

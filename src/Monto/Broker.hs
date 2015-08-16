@@ -6,7 +6,6 @@ module Monto.Broker
   , printBroker
   , registerService
   , deregisterService
-  , registerServer
   , registerProductDep
   , Broker(..)
   , newVersion
@@ -103,8 +102,8 @@ data Broker = Broker
   , productDependencies :: DependencyGraph ProductDependency
   , automaton           :: Automaton (Map ServerDependency L) ServerDependency (Set ServerDependency)
   , processes           :: Map Source (Process (Map ServerDependency L) ServerDependency (Set ServerDependency))
-  , servers             :: [Service]
-  , freePorts           :: [Port]
+  , services            :: Map ServiceID Service
+  , portPool            :: [Port]
   } deriving (Eq,Show)
 
 empty :: Broker
@@ -119,44 +118,40 @@ empty = Broker
       , accepting    = []
       }
   , processes = M.empty
-  , servers = []
-  , freePorts = [5010..5020]
+  , services = M.empty
+  , portPool = [5010..5020]
   }
 
 printBroker :: Broker -> IO()
 printBroker broker = do
-  putStrLn $ show (servers broker)
-  putStrLn $ show (freePorts broker)
+  putStrLn $ show (services broker)
+  putStrLn $ show (portPool broker)
 
-registerServer :: Server -> [ServerDependency] -> Broker -> IO Broker
-{-# INLINE registerServer #-}
-registerServer server' deps broker =
-  let serviceDependencies' = DG.register server' deps (serviceDependencies broker)
+registerService :: Server -> ServiceID -> [ServerDependency] -> Broker -> IO Broker
+{-# INLINE registerService #-}
+registerService server' serviceID' deps broker =
+  let portPool' = tail (portPool broker)
+      services' = M.insert serviceID' (Service server' serviceID' (head (portPool broker))) (services broker)
+      serviceDependencies' = DG.register server' deps (serviceDependencies broker)
   in return broker
   { serviceDependencies = serviceDependencies'
   , automaton = updateAutomaton (DG.dependencies serviceDependencies')
-  }
-
-registerService :: Server -> ServiceID -> Broker -> IO Broker
-{-# INLINE registerService #-}
-registerService server' serviceID' broker =
-  let freePorts' = (tail (freePorts broker))
-      servers' = List.insert (Service server' serviceID' (head (freePorts broker))) (servers broker)
-  in return broker
-  { servers = servers'
-  , freePorts = freePorts'
+  , services = services'
+  , portPool = portPool'
   }
 
 deregisterService :: ServiceID -> Broker -> IO Broker
 {-# INLINE deregisterService #-}
 deregisterService serviceID' broker =
-  let service = head (List.filter (\(Service _ serviceID'' _) -> serviceID'' == serviceID') (servers broker))
-      servers' = List.delete service (servers broker)
-      freePorts' = List.insert (port service) (freePorts broker)
-  in return broker
-  { servers = servers'
-  , freePorts = freePorts'
-  }
+  let service = M.lookup serviceID' (services broker)
+  in case service of
+    Just service' ->
+      return broker
+      { services = M.delete serviceID' (services broker)
+      , portPool = List.insert (port service') (portPool broker)
+      }
+    Nothing -> return broker
+
 
 registerProductDep :: ProductDependency -> [ProductDependency] -> Broker -> ([Source],Broker)
 registerProductDep from to broker =
