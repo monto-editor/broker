@@ -100,7 +100,7 @@ runServer opts ctx src snk = do
         Nothing -> yield
       case maybeRegister of
         Just register -> do
-          let serviceID = RQ.registerServiceID register
+          let serviceID = RQ.serviceID register
           let server = B.Server (RQ.product register) (RQ.language register)
           putStrLn $ unwords ["register", T.unpack serviceID, "->", "broker"]
           modifyMVar_ broker (B.registerService server serviceID (map read $ Vector.toList $ fromJust $ RQ.dependencies register))
@@ -109,7 +109,7 @@ runServer opts ctx src snk = do
 
           thread <- runServiceThread opts ctx snk service sockets broker
           modifyMVar_ threads $ mapInsert serviceID thread
-          Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse serviceID "ok" $ Just $ B.port service)))
+          Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "ok" $ Just $ B.port service)))
         Nothing -> yield
 
     _ <- readMVar interrupted
@@ -134,9 +134,7 @@ runServiceThread opts ctx snk service sockets broker =
     Z.withSocket ctx Z.Pair $ \sckt -> do
       let port = (B.port service)
           server = (B.server service)
-      Z.bind sckt ("tcp://*:" ++ show port) `catch` \(e :: SomeException) -> do
-        putStrLn $ unwords ["couldn't bind address", "tcp://*:" ++ show port, "for server", show server]
-        throw e
+      Z.connect sckt ("tcp://127.0.0.1:" ++ show port)
       putStrLn $ unwords ["listen on address", "tcp://*:" ++ show port, "for", show server]
       modifyMVar_ sockets $ mapInsert server sckt
       forever $ do
@@ -162,17 +160,16 @@ onDeregisterMessage deregMsg broker socket sockets threads = do
       let server = B.server service
       let port = B.port service
 
+      sockets' <- readMVar sockets
+      let socket' = fromJust (M.lookup server sockets')
+      putStrLn $ "tcp://*:" ++ show port
+      Z.close socket'
+      modifyMVar_ sockets $ mapRemove server
+
       threads' <- readMVar threads
       let thread = fromJust $ M.lookup serviceID threads'
       killThread thread
       modifyMVar_ threads $ mapRemove serviceID
-
-      sockets' <- readMVar sockets
-      let socket' = fromJust (M.lookup server sockets')
-      putStrLn $ "tcp://*:" ++ show port
-      Z.unbind socket' ("tcp://*:" ++ show port)
-      Z.close socket'
-      modifyMVar_ sockets $ mapRemove server
 
     Nothing -> yield
 

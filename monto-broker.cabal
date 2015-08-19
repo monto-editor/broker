@@ -23,7 +23,6 @@ library
                        Monto.RegisterServiceResponse,
                        Monto.ResourceManager,
                        Monto.ServerDependency,
-                       Monto.SubscriptionMessage,
                        Monto.Types,
                        Monto.VersionMessage
   build-depends:       base,
