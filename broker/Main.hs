@@ -107,17 +107,17 @@ runServer opts ctx src snk = do
           b <- readMVar broker
           let service = fromJust $ M.lookup serviceID (B.services b)
 
-          thread <- runServiceThread opts ctx snk service sockets broker
+          thread <- runServiceThread opts snk service sockets broker
           modifyMVar_ threads $ mapInsert serviceID thread
           Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "ok" $ Just $ B.port service)))
         Nothing -> yield
 
     _ <- readMVar interrupted
-    killThread sourceThread
-    killThread registerThread
     threads' <- readMVar threads
     let elems = M.elems threads'
     forM_ elems killThread
+    killThread registerThread
+    killThread sourceThread
 
 runSourceThread :: Z.Receiver a => Options -> Socket a -> MVar Sockets -> MVar Broker -> IO ThreadId
 runSourceThread opts src sockets broker =
@@ -128,23 +128,24 @@ runSourceThread opts src sockets broker =
       sockets' <- readMVar sockets
       modifyMVar_ broker $ onVersionMessage opts msg' sockets'
 
-runServiceThread :: Z.Sender a => Options -> Context -> Socket a -> B.Service -> MVar Sockets -> MVar Broker -> IO ThreadId
-runServiceThread opts ctx snk service sockets broker =
+runServiceThread :: Z.Sender a => Options -> Socket a -> B.Service -> MVar Sockets -> MVar Broker -> IO ThreadId
+runServiceThread opts snk service sockets broker =
   forkIO $
-    Z.withSocket ctx Z.Pair $ \sckt -> do
-      let port = (B.port service)
-          server = (B.server service)
-      Z.connect sckt ("tcp://127.0.0.1:" ++ show port)
-      putStrLn $ unwords ["listen on address", "tcp://*:" ++ show port, "for", show server]
-      modifyMVar_ sockets $ mapInsert server sckt
-      forever $ do
-        rawMsg' <- Z.receive sckt
-        Z.send snk [] rawMsg'
-        let msg = A.decodeStrict rawMsg'
-        for_ msg $ \msg' -> do
-          when (debug opts) $ putStrLn $ unwords [show server, T.unpack (P.source msg'), "->", "broker"]
-          sockets' <- readMVar sockets
-          modifyMVar_ broker $ onProductMessage opts msg' sockets'
+    Z.withContext $ \ctx -> do
+      Z.withSocket ctx Z.Pair $ \sckt -> do
+        let port = (B.port service)
+            server = (B.server service)
+        Z.connect sckt ("tcp://127.0.0.1:" ++ show port)
+        putStrLn $ unwords ["listen on address", "tcp://*:" ++ show port, "for", show server]
+        modifyMVar_ sockets $ mapInsert server sckt
+        forever $ do
+          rawMsg' <- Z.receive sckt
+          Z.send snk [] rawMsg'
+          let msg = A.decodeStrict rawMsg'
+          for_ msg $ \msg' -> do
+            when (debug opts) $ putStrLn $ unwords [show server, T.unpack (P.source msg'), "->", "broker"]
+            sockets' <- readMVar sockets
+            modifyMVar_ broker $ onProductMessage opts msg' sockets'
 
 onDeregisterMessage :: Z.Sender a => D.DeregisterService -> MVar Broker -> Socket a -> MVar Sockets -> MVar (Map ServiceID ThreadId) -> IO()
 onDeregisterMessage deregMsg broker socket sockets threads = do
