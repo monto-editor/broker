@@ -1,0 +1,1 @@
+java -jar websockets/dist/broker-websockets.jar
