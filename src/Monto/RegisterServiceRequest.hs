@@ -12,6 +12,8 @@ import           Monto.Types
 data RegisterServiceRequest =
   RegisterServiceRequest
     { serviceID    :: ServiceID
+    , label        :: Text
+    , description  :: Text
     , language     :: Language
     , product      :: Product
     , dependencies :: Maybe (Vector String)
