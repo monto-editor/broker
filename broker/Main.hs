@@ -14,7 +14,6 @@ import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import           Data.Foldable (for_)
-import qualified Data.List as List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
@@ -28,13 +27,14 @@ import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 import qualified Monto.RegisterServiceRequest as RQ
 import qualified Monto.RegisterServiceResponse as RS
-import           Monto.Types (ServiceID)
+import           Monto.Types (Port)
 import           Monto.VersionMessage (VersionMessage)
 import qualified Monto.VersionMessage as V
 
 import           Options.Applicative
 
 type Addr = String
+type SocketPool = Map Port (Socket Pair)
 type Sockets = Map Server (Socket Pair)
 
 data Options = Options
@@ -75,9 +75,12 @@ run opts ctx = do
 runServer :: Options -> Context -> Socket Sub -> Socket Pub -> IO ()
 runServer opts ctx src snk = do
   interrupted <- newEmptyMVar
-  threads <- newMVar M.empty
   broker <- newMVar B.empty
   sockets <- newMVar M.empty
+  broker' <- readMVar broker
+  let portPool = B.portPool broker'
+  socketPool <- newMVar M.empty
+  threads <- forM portPool $ runServiceThread opts snk socketPool sockets broker
 
   let stopExcecution = putMVar interrupted Interrupted
   _ <- installHandler sigINT  (Catch stopExcecution) Nothing
@@ -96,26 +99,14 @@ runServer opts ctx src snk = do
       let maybeDeregister = (A.decodeStrict rawMsg) :: Maybe D.DeregisterService
       let maybeRegister = (A.decodeStrict rawMsg) :: Maybe RQ.RegisterServiceRequest
       case maybeDeregister of
-        Just deregister -> onDeregisterMessage deregister broker regSocket sockets threads
+        Just deregister -> onDeregisterMessage deregister broker regSocket sockets
         Nothing -> yield
       case maybeRegister of
-        Just register -> do
-          let serviceID = RQ.serviceID register
-          let server = B.Server (RQ.product register) (RQ.language register)
-          putStrLn $ unwords ["register", T.unpack serviceID, "->", "broker"]
-          modifyMVar_ broker (B.registerService server serviceID (map read $ Vector.toList $ fromJust $ RQ.dependencies register))
-          b <- readMVar broker
-          let service = fromJust $ M.lookup serviceID (B.services b)
-
-          thread <- runServiceThread opts snk service sockets broker
-          modifyMVar_ threads $ mapInsert serviceID thread
-          Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "ok" $ Just $ B.port service)))
+        Just register -> onRegisterMessage register regSocket sockets socketPool broker
         Nothing -> yield
 
     _ <- readMVar interrupted
-    threads' <- readMVar threads
-    let elems = M.elems threads'
-    forM_ elems killThread
+    forM_ threads killThread
     killThread registerThread
     killThread sourceThread
 
@@ -128,27 +119,37 @@ runSourceThread opts src sockets broker =
       sockets' <- readMVar sockets
       modifyMVar_ broker $ onVersionMessage opts msg' sockets'
 
-runServiceThread :: Z.Sender a => Options -> Socket a -> B.Service -> MVar Sockets -> MVar Broker -> IO ThreadId
-runServiceThread opts snk service sockets broker =
+runServiceThread :: Z.Sender a => Options -> Socket a -> MVar SocketPool -> MVar Sockets -> MVar Broker -> Port -> IO ThreadId
+runServiceThread opts snk socketPool sockets broker port =
   forkIO $
     Z.withContext $ \ctx -> do
       Z.withSocket ctx Z.Pair $ \sckt -> do
-        let port = (B.port service)
-            server = (B.server service)
-        Z.connect sckt ("tcp://127.0.0.1:" ++ show port)
-        putStrLn $ unwords ["listen on address", "tcp://*:" ++ show port, "for", show server]
-        modifyMVar_ sockets $ mapInsert server sckt
+        Z.bind sckt ("tcp://*:" ++ show port)
+        putStrLn $ unwords ["listen on address", "tcp://*:" ++ show port]
+        modifyMVar_ socketPool $ mapInsert port sckt
         forever $ do
           rawMsg' <- Z.receive sckt
           Z.send snk [] rawMsg'
           let msg = A.decodeStrict rawMsg'
           for_ msg $ \msg' -> do
-            when (debug opts) $ putStrLn $ unwords [show server, T.unpack (P.source msg'), "->", "broker"]
+            when (debug opts) $ putStrLn $ unwords [T.unpack (P.source msg'), "->", "broker"]
             sockets' <- readMVar sockets
             modifyMVar_ broker $ onProductMessage opts msg' sockets'
 
-onDeregisterMessage :: Z.Sender a => D.DeregisterService -> MVar Broker -> Socket a -> MVar Sockets -> MVar (Map ServiceID ThreadId) -> IO()
-onDeregisterMessage deregMsg broker socket sockets threads = do
+onRegisterMessage :: Z.Sender a => RQ.RegisterServiceRequest -> Socket a -> MVar Sockets -> MVar SocketPool -> MVar Broker -> IO()
+onRegisterMessage register regSocket sockets socketPool broker = do
+  let serviceID = RQ.serviceID register
+  let server = B.Server (RQ.product register) (RQ.language register)
+  putStrLn $ unwords ["register", T.unpack serviceID, "->", "broker"]
+  modifyMVar_ broker (B.registerService server serviceID (map read $ Vector.toList $ fromJust $ RQ.dependencies register))
+  b <- readMVar broker
+  let service = fromJust $ M.lookup serviceID (B.services b)
+  socketPool' <- readMVar socketPool
+  modifyMVar_ sockets $ mapInsert server $ fromJust $ (M.lookup (B.port service) socketPool')
+  Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "ok" $ Just $ B.port service)))
+
+onDeregisterMessage :: Z.Sender a => D.DeregisterService -> MVar Broker -> Socket a -> MVar Sockets -> IO()
+onDeregisterMessage deregMsg broker socket sockets = do
   putStrLn $ unwords ["deregister", T.unpack (D.deregisterServiceID deregMsg), "->", "broker"]
   modifyMVar_ broker (B.deregisterService (D.deregisterServiceID deregMsg))
   Z.send socket [] ""
@@ -159,19 +160,7 @@ onDeregisterMessage deregMsg broker socket sockets threads = do
   case maybeService of
     Just service -> do
       let server = B.server service
-      let port = B.port service
-
-      sockets' <- readMVar sockets
-      let socket' = fromJust (M.lookup server sockets')
-      putStrLn $ "tcp://*:" ++ show port
-      Z.close socket'
       modifyMVar_ sockets $ mapRemove server
-
-      threads' <- readMVar threads
-      let thread = fromJust $ M.lookup serviceID threads'
-      killThread thread
-      modifyMVar_ threads $ mapRemove serviceID
-
     Nothing -> yield
 
 mapInsert :: Ord k => k -> v -> Map k v -> IO (Map k v)
@@ -181,11 +170,6 @@ mapInsert k v m = do
 mapRemove :: Ord k => k -> Map k v -> IO (Map k v)
 mapRemove k m = do
   return (M.delete k m)
-
-
-listInsert :: Ord a => a -> [a] -> IO [a]
-listInsert item list = do
-  return (List.insert item list)
 
 onVersionMessage :: Options -> VersionMessage -> Sockets -> Broker -> IO Broker
 {-# INLINE onVersionMessage #-}
