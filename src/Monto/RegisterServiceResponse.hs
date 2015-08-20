@@ -5,8 +5,6 @@ import           Data.Aeson.TH
 import           Data.Text (Text)
 import qualified Data.Text as T
 
-import           Monto.Types
-
 data RegisterServiceResponse =
   RegisterServiceResponse
     { response    :: Text
