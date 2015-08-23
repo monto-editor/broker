@@ -16,7 +16,8 @@ library
                        Monto.Broker,
                        Monto.DependencyGraph,
                        Monto.DeregisterService,
-                       Monto.DiscoverRequest
+                       Monto.DiscoverRequest,
+                       Monto.DiscoverResponse,
                        Monto.ProductDependency,
                        Monto.ProductMessage,
                        Monto.RegisterServiceRequest,

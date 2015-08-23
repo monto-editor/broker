@@ -38,6 +38,7 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Graph.Inductive (Gr,Node)
 import qualified Data.Graph.Inductive as G
+import qualified Data.Vector as Vector
 
 import           Monto.Automaton (Automaton(..),L,Process)
 import qualified Monto.Automaton as A
@@ -50,6 +51,8 @@ import           Monto.DependencyGraph (DependencyGraph,Dependency(..))
 import qualified Monto.DependencyGraph as DG
 import qualified Monto.VersionMessage as V
 import qualified Monto.ProductMessage as P
+import           Monto.RegisterServiceRequest (RegisterServiceRequest)
+import qualified Monto.RegisterServiceRequest as RQ
 
 data ProductDependency
   = Version Source
@@ -79,14 +82,17 @@ instance Read Server where
     return (Server (T.pack a) (T.pack c),r''')
 
 data Service = Service
-  { server :: Server
-  , serviceID :: ServiceID
-  , port :: Port
+  { serviceID   :: ServiceID
+  , label       :: Text
+  , description :: Text
+  , language    :: Language
+  , product     :: Product
+  , port        :: Port
   }
   deriving (Eq,Ord)
 
 instance Show Service where
-  show (Service server' serviceID' port') = concat [show server', "/", T.unpack serviceID', "/", show port']
+  show (Service serviceID' _ _ language' product' port') = concat [T.unpack product', "/", T.unpack language', "/", T.unpack serviceID', "/", show port']
 
 type ServerDependency = Dependency Server
 
@@ -127,11 +133,14 @@ printBroker broker = do
   putStrLn $ show (services broker)
   putStrLn $ show (portPool broker)
 
-registerService :: Server -> ServiceID -> [ServerDependency] -> Broker -> IO Broker
+registerService :: RegisterServiceRequest -> Broker -> IO Broker
 {-# INLINE registerService #-}
-registerService server' serviceID' deps broker =
-  let portPool' = tail (portPool broker)
-      services' = M.insert serviceID' (Service server' serviceID' (head (portPool broker))) (services broker)
+registerService register broker =
+  let serviceID' = RQ.serviceID register
+      server' = Server (RQ.product register) (RQ.language register)
+      deps = (map read $ Vector.toList $ fromJust $ RQ.dependencies register)
+      portPool' = tail (portPool broker)
+      services' = M.insert serviceID' (Service serviceID'(RQ.label register) (RQ.description register) (RQ.language register) (RQ.product register) (head (portPool broker))) (services broker)
       serviceDependencies' = DG.register server' deps (serviceDependencies broker)
   in return broker
   { serviceDependencies = serviceDependencies'
@@ -220,13 +229,13 @@ newProduct pr broker
 
 makeResponse :: Broker -> Source -> Product -> Language -> Maybe Response
 {-# INLINE makeResponse #-}
-makeResponse broker source product language =
-  let sdeps = lookupDependencies (Dependency (Server product language)) (serviceDependencies broker)
-      pdeps = lookupDependencies (Dependency (Product (source,language,product))) (productDependencies broker)
+makeResponse broker source product' language' =
+  let sdeps = lookupDependencies (Dependency (Server product' language')) (serviceDependencies broker)
+      pdeps = lookupDependencies (Dependency (Product (source,language',product'))) (productDependencies broker)
       deps = map (depForServer source) sdeps ++ map (\(Dependency p) -> p) pdeps
       msgs = catMaybes $ map (lookupDependency broker) deps
   in if all isJust $ map (\(Dependency p) -> lookupDependency broker p) pdeps
-      then Just $ Response source (Server product language) msgs
+      then Just $ Response source (Server product' language') msgs
       else Nothing
 
 depForServer :: Source -> ServerDependency -> ProductDependency

@@ -23,6 +23,10 @@ import qualified Data.Vector as Vector
 import           Monto.Broker (Broker,Response,Server)
 import qualified Monto.Broker as B
 import qualified Monto.DeregisterService as D
+import           Monto.DiscoverRequest (DiscoverRequest)
+import qualified Monto.DiscoverRequest as DiscoverReq
+import           Monto.DiscoverResponse (DiscoverResponse)
+import qualified Monto.DiscoverResponse as DiscoverResp
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 import qualified Monto.RegisterServiceRequest as RQ
@@ -93,7 +97,7 @@ runServer opts ctx src snk = do
       throw e
     putStrLn $ unwords ["listen on address", (registration opts), "for registrations"]
 
-    sourceThread <- runSourceThread opts src sockets broker
+    sourceThread <- runSourceThread opts src snk sockets broker
     registerThread <- forkIO $ forever $ do
       rawMsg <- Z.receive regSocket
       let maybeDeregister = (A.decodeStrict rawMsg) :: Maybe D.DeregisterService
@@ -110,14 +114,23 @@ runServer opts ctx src snk = do
     killThread registerThread
     killThread sourceThread
 
-runSourceThread :: Z.Receiver a => Options -> Socket a -> MVar Sockets -> MVar Broker -> IO ThreadId
-runSourceThread opts src sockets broker =
+runSourceThread :: Z.Receiver a => Z.Sender b => Options -> Socket a -> Socket b -> MVar Sockets -> MVar Broker -> IO ThreadId
+runSourceThread opts src snk sockets broker =
   forkIO $ forever $ do
-    msg <- A.decodeStrict <$> Z.receive src
-    for_ msg $ \msg' -> do
-      when (debug opts) $ putStrLn $ unwords ["version", T.unpack (V.source msg'),"->", "broker"]
-      sockets' <- readMVar sockets
-      modifyMVar_ broker $ onVersionMessage opts msg' sockets'
+    rawMsg <- Z.receive src
+    let maybeVersionMsg = (A.decodeStrict rawMsg) :: Maybe VersionMessage
+    let maybeDiscoverMsg = (A.decodeStrict rawMsg) :: Maybe [DiscoverRequest]
+    case maybeVersionMsg of
+      Just msg -> do
+        when (debug opts) $ putStrLn $ unwords ["version", T.unpack (V.source msg),"->", "broker"]
+        sockets' <- readMVar sockets
+        modifyMVar_ broker $ onVersionMessage opts msg sockets'
+      Nothing -> yield
+    case maybeDiscoverMsg of
+      Just msg -> do
+        b <- readMVar broker
+        Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode (map (\(B.Service serviceID label description language product _) -> DiscoverResp.DiscoverResponse serviceID label description language product) (M.elems (B.services b)))
+      Nothing -> yield
 
 runServiceThread :: Z.Sender a => Options -> Socket a -> MVar SocketPool -> MVar Sockets -> MVar Broker -> Port -> IO ThreadId
 runServiceThread opts snk socketPool sockets broker port =
@@ -141,7 +154,7 @@ onRegisterMessage register regSocket sockets socketPool broker = do
   let serviceID = RQ.serviceID register
   let server = B.Server (RQ.product register) (RQ.language register)
   putStrLn $ unwords ["register", T.unpack serviceID, "->", "broker"]
-  modifyMVar_ broker (B.registerService server serviceID (map read $ Vector.toList $ fromJust $ RQ.dependencies register))
+  modifyMVar_ broker (B.registerService register)
   b <- readMVar broker
   let service = fromJust $ M.lookup serviceID (B.services b)
   socketPool' <- readMVar socketPool
@@ -159,7 +172,7 @@ onDeregisterMessage deregMsg broker socket sockets = do
   let maybeService = M.lookup serviceID $ B.services broker'
   case maybeService of
     Just service -> do
-      let server = B.server service
+      let server = B.Server (B.product service) (B.language service)
       modifyMVar_ sockets $ mapRemove server
     Nothing -> yield
 

@@ -8,13 +8,13 @@ import           Monto.Types
 
 data DiscoverRequest =
   DiscoverRequest
-    { checkServiceIDs :: Vector ServiceID
-    , languages       :: Vector Language
-    , products        :: Vector Product
+    { serviceID :: Maybe ServiceID
+    , language  :: Maybe Language
+    , product   :: Maybe Product
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
-    "checkServiceIDs" -> "check_service_ids"
+    "serviceID" -> "service_id"
     label -> label
 }) ''DiscoverRequest)
 
