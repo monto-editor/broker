@@ -14,11 +14,12 @@ import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BSL
 import           Data.Foldable (for_)
+import qualified Data.List as List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
 import qualified Data.Text as T
-import qualified Data.Vector as Vector
+import qualified Data.Text.Encoding as TextEnc
 
 import           Monto.Broker (Broker,Response,Server)
 import qualified Monto.Broker as B
@@ -31,7 +32,7 @@ import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 import qualified Monto.RegisterServiceRequest as RQ
 import qualified Monto.RegisterServiceResponse as RS
-import           Monto.Types (Port)
+import           Monto.Types (Port, ServiceID)
 import           Monto.VersionMessage (VersionMessage)
 import qualified Monto.VersionMessage as V
 
@@ -129,7 +130,8 @@ runSourceThread opts src snk sockets broker =
     case maybeDiscoverMsg of
       Just msg -> do
         b <- readMVar broker
-        Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode (map (\(B.Service serviceID label description language product _) -> DiscoverResp.DiscoverResponse serviceID label description language product) (M.elems (B.services b)))
+        Z.send snk [Z.SendMore] "discover"
+        Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode (map (\(B.Service serviceID label description language product' _) -> DiscoverResp.DiscoverResponse serviceID label description language product') (M.elems (B.services b)))
       Nothing -> yield
 
 runServiceThread :: Z.Sender a => Options -> Socket a -> MVar SocketPool -> MVar Sockets -> MVar Broker -> Port -> IO ThreadId
@@ -142,12 +144,19 @@ runServiceThread opts snk socketPool sockets broker port =
         modifyMVar_ socketPool $ mapInsert port sckt
         forever $ do
           rawMsg' <- Z.receive sckt
+          broker' <- readMVar broker
+          let serviceID = getServiceIdByPort port broker'
+          Z.send snk [Z.SendMore] (TextEnc.encodeUtf8 serviceID)
           Z.send snk [] rawMsg'
           let msg = A.decodeStrict rawMsg'
           for_ msg $ \msg' -> do
             when (debug opts) $ putStrLn $ unwords [T.unpack (P.source msg'), "->", "broker"]
             sockets' <- readMVar sockets
             modifyMVar_ broker $ onProductMessage opts msg' sockets'
+
+getServiceIdByPort :: Port -> Broker -> ServiceID
+getServiceIdByPort port broker =
+  (B.serviceID (List.head (List.filter (\(B.Service _ _ _ _ _ port') -> port' == port) (M.elems (B.services broker)))))
 
 onRegisterMessage :: Z.Sender a => RQ.RegisterServiceRequest -> Socket a -> MVar Sockets -> MVar SocketPool -> MVar Broker -> IO()
 onRegisterMessage register regSocket sockets socketPool broker = do
