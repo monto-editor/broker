@@ -2,7 +2,6 @@
 module Monto.DiscoverRequest where
 
 import           Data.Aeson.TH
-import           Data.Vector (Vector)
 
 import           Monto.Types
 

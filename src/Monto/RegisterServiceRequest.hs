@@ -12,12 +12,13 @@ import           Monto.Types
 
 data RegisterServiceRequest =
   RegisterServiceRequest
-    { serviceID    :: ServiceID
-    , label        :: Text
-    , description  :: Text
-    , language     :: Language
-    , product      :: Product
-    , dependencies :: Maybe (Vector String)
+    { serviceID     :: ServiceID
+    , label         :: Text
+    , description   :: Text
+    , language      :: Language
+    , product       :: Product
+    , configuration :: Maybe String
+    , dependencies  :: Maybe (Vector String)
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
@@ -29,7 +30,7 @@ registerServiceRequestDependencies :: RegisterServiceRequest -> Vector String
 registerServiceRequestDependencies = fromMaybe V.empty . dependencies
 
 instance Show RegisterServiceRequest where
-  show (RegisterServiceRequest i _ _ l p _) =
+  show (RegisterServiceRequest i _ _ l p _ _) =
     concat [ "{", T.unpack i
            , ",", T.unpack l
            , ",", T.unpack p

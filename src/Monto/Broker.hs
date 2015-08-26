@@ -82,17 +82,18 @@ instance Read Server where
     return (Server (T.pack a) (T.pack c),r''')
 
 data Service = Service
-  { serviceID   :: ServiceID
-  , label       :: Text
-  , description :: Text
-  , language    :: Language
-  , product     :: Product
-  , port        :: Port
+  { serviceID     :: ServiceID
+  , label         :: Text
+  , description   :: Text
+  , language      :: Language
+  , product       :: Product
+  , port          :: Port
+  , configuration :: Maybe String
   }
   deriving (Eq,Ord)
 
 instance Show Service where
-  show (Service serviceID' _ _ language' product' port') = concat [T.unpack product', "/", T.unpack language', "/", T.unpack serviceID', "/", show port']
+  show (Service serviceID' _ _ language' product' port' _) = concat [T.unpack product', "/", T.unpack language', "/", T.unpack serviceID', "/", show port']
 
 type ServerDependency = Dependency Server
 
@@ -140,7 +141,7 @@ registerService register broker =
       server' = Server (RQ.product register) (RQ.language register)
       deps = (map read $ Vector.toList $ fromJust $ RQ.dependencies register)
       portPool' = tail (portPool broker)
-      services' = M.insert serviceID' (Service serviceID'(RQ.label register) (RQ.description register) (RQ.language register) (RQ.product register) (head (portPool broker))) (services broker)
+      services' = M.insert serviceID' (Service serviceID'(RQ.label register) (RQ.description register) (RQ.language register) (RQ.product register) (head (portPool broker)) (RQ.configuration register)) (services broker)
       serviceDependencies' = DG.register server' deps (serviceDependencies broker)
   in return broker
   { serviceDependencies = serviceDependencies'

@@ -131,7 +131,7 @@ runSourceThread opts src snk sockets broker =
       Just msg -> do
         b <- readMVar broker
         Z.send snk [Z.SendMore] "discover"
-        Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode (map (\(B.Service serviceID label description language product' _) -> DiscoverResp.DiscoverResponse serviceID label description language product') (M.elems (B.services b)))
+        Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode (map (\(B.Service serviceID label description language product' _ configuration) -> DiscoverResp.DiscoverResponse serviceID label description language product' configuration) (M.elems (B.services b)))
       Nothing -> yield
 
 runServiceThread :: Z.Sender a => Options -> Socket a -> MVar SocketPool -> MVar Sockets -> MVar Broker -> Port -> IO ThreadId
@@ -156,7 +156,7 @@ runServiceThread opts snk socketPool sockets broker port =
 
 getServiceIdByPort :: Port -> Broker -> ServiceID
 getServiceIdByPort port broker =
-  (B.serviceID (List.head (List.filter (\(B.Service _ _ _ _ _ port') -> port' == port) (M.elems (B.services broker)))))
+  (B.serviceID (List.head (List.filter (\(B.Service _ _ _ _ _ port' _) -> port' == port) (M.elems (B.services broker)))))
 
 onRegisterMessage :: Z.Sender a => RQ.RegisterServiceRequest -> Socket a -> MVar Sockets -> MVar SocketPool -> MVar Broker -> IO()
 onRegisterMessage register regSocket sockets socketPool broker = do
