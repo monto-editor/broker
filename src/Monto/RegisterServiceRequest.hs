@@ -12,13 +12,13 @@ import           Monto.Types
 
 data RegisterServiceRequest =
   RegisterServiceRequest
-    { serviceID     :: ServiceID
-    , label         :: Text
-    , description   :: Text
-    , language      :: Language
-    , product       :: Product
-    , configuration :: Maybe String
-    , dependencies  :: Maybe (Vector String)
+    { serviceID    :: ServiceID
+    , label        :: Text
+    , description  :: Text
+    , language     :: Language
+    , product      :: Product
+    , options      :: Maybe String
+    , dependencies :: Maybe (Vector String)
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of

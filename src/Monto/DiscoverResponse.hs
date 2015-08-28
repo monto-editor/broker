@@ -9,12 +9,12 @@ import           Monto.Types
 
 data DiscoverResponse =
   DiscoverResponse
-    { serviceID     :: ServiceID
-    , label         :: Text
-    , description   :: Text
-    , language      :: Language
-    , product       :: Product
-    , configuration :: Maybe String
+    { serviceID   :: ServiceID
+    , label       :: Text
+    , description :: Text
+    , language    :: Language
+    , product     :: Product
+    , options     :: Maybe String
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of

@@ -82,13 +82,13 @@ instance Read Server where
     return (Server (T.pack a) (T.pack c),r''')
 
 data Service = Service
-  { serviceID     :: ServiceID
-  , label         :: Text
-  , description   :: Text
-  , language      :: Language
-  , product       :: Product
-  , port          :: Port
-  , configuration :: Maybe String
+  { serviceID   :: ServiceID
+  , label       :: Text
+  , description :: Text
+  , language    :: Language
+  , product     :: Product
+  , port        :: Port
+  , options     :: Maybe String
   }
   deriving (Eq,Ord)
 
@@ -141,7 +141,7 @@ registerService register broker =
       server' = Server (RQ.product register) (RQ.language register)
       deps = (map read $ Vector.toList $ fromJust $ RQ.dependencies register)
       portPool' = tail (portPool broker)
-      services' = M.insert serviceID' (Service serviceID'(RQ.label register) (RQ.description register) (RQ.language register) (RQ.product register) (head (portPool broker)) (RQ.configuration register)) (services broker)
+      services' = M.insert serviceID' (Service serviceID'(RQ.label register) (RQ.description register) (RQ.language register) (RQ.product register) (head (portPool broker)) (RQ.options register)) (services broker)
       serviceDependencies' = DG.register server' deps (serviceDependencies broker)
   in return broker
   { serviceDependencies = serviceDependencies'
