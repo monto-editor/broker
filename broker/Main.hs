@@ -144,9 +144,7 @@ runSourceThread opts src snk sockets socketPool broker =
         socketPool' <- readMVar socketPool
 --        (ConfigMsg.ConfigurationMessage serviceID _ )
         forM_ msg (\config
-          -> do
-            putStrLn $ show config
-            Z.send (fromJust (M.lookup (B.port $ List.head $ List.filter (\(B.Service serviceID' _ _ _ _ port _) -> (ConfigMsg.serviceID config) == serviceID') services) socketPool')) [] (BS.concat $ BSL.toChunks $ A.encode (config:[])))
+          -> Z.send (fromJust (M.lookup (B.port $ List.head $ List.filter (\(B.Service serviceID' _ _ _ _ port _) -> (ConfigMsg.serviceID config) == serviceID') services) socketPool')) [] (BS.concat $ BSL.toChunks $ A.encode (config:[])))
       Nothing -> yield
 
 runServiceThread :: Z.Sender a => Options -> Socket a -> MVar SocketPool -> MVar Sockets -> MVar Broker -> Port -> IO ThreadId
