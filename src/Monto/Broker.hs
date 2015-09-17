@@ -113,9 +113,9 @@ data Broker = Broker
   , portPool            :: [Port]
   } deriving (Eq,Show)
 
-empty :: Broker
+empty :: Int -> Int -> Broker
 {-# INLINE empty #-}
-empty = Broker
+empty from to = Broker
   { resourceMgr = R.empty
   , serviceDependencies = DG.empty
   , productDependencies = DG.empty
@@ -126,7 +126,7 @@ empty = Broker
       }
   , processes = M.empty
   , services = M.empty
-  , portPool = [5010..5020]
+  , portPool = [from..to]
   }
 
 printBroker :: Broker -> IO()

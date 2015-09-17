@@ -49,14 +49,18 @@ data Options = Options
   , sink          :: Addr
   , source        :: Addr
   , registration  :: Addr
+  , fromPort      :: Int
+  , toPort        :: Int
   }
 
 options :: Parser Options
 options = Options
-  <$> switch      (long "debug"        <> help "print messages that are transmitted over the broker")
-  <*> strOption   (long "sink"         <> help "address of the sink")
-  <*> strOption   (long "source"       <> help "address of the source")
-  <*> strOption   (long "registration" <> help "address for service registration")
+  <$> switch      (short 'd' <> long "debug"        <> help "print messages that are transmitted over the broker")
+  <*> strOption   (short 'c' <> long "sink"         <> help "address of the sink")
+  <*> strOption   (short 'k' <> long "source"       <> help "address of the source")
+  <*> strOption   (short 'r' <> long "registration" <> help "address for service registration")
+  <*> option auto (short 'f' <> long "servicesFrom" <> help "port from which on services can connect")
+  <*> option auto (short 't' <> long "servicesTo"   <> help "port to which services can connect")
 
 main :: IO ()
 main = do
@@ -82,7 +86,7 @@ run opts ctx = do
 runServer :: Options -> Context -> Socket Sub -> Socket Pub -> IO ()
 runServer opts ctx src snk = do
   interrupted <- newEmptyMVar
-  broker <- newMVar B.empty
+  broker <- newMVar $ B.empty (fromPort opts) (toPort opts)
   sockets <- newMVar M.empty
   broker' <- readMVar broker
   let portPool = B.portPool broker'

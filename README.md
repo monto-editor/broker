@@ -27,6 +27,4 @@ Build Instructions
    $ cabal build
    ```
 
-3. Start the broker with `./startBroker.sh`
-
-4. If WebSocket support is required also start the websockets addon with `./startWebSockets.sh`
+3. Start the broker with `./start.sh`
