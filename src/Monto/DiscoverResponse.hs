@@ -2,6 +2,7 @@
 module Monto.DiscoverResponse where
 
 import           Data.Aeson.TH
+import           Data.Aeson (Value)
 import           Data.Text (Text)
 import qualified Data.Text as T
 
@@ -14,7 +15,7 @@ data DiscoverResponse =
     , description :: Text
     , language    :: Language
     , product     :: Product
-    , options     :: Maybe String
+    , options     :: Maybe Value
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of

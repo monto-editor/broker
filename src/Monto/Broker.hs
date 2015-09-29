@@ -28,6 +28,7 @@ import           Control.Applicative hiding (empty)
 
 import           Control.Monad (guard)
 
+import           Data.Aeson (Value)
 import           Data.Maybe (fromJust,fromMaybe,isJust,catMaybes)
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -88,9 +89,9 @@ data Service = Service
   , language    :: Language
   , product     :: Product
   , port        :: Port
-  , options     :: Maybe String
+  , options     :: Maybe Value
   }
-  deriving (Eq,Ord)
+  deriving (Eq)
 
 instance Show Service where
   show (Service serviceID' _ _ language' product' port' _) = concat [T.unpack product', "/", T.unpack language', "/", T.unpack serviceID', "/", show port']

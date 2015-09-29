@@ -135,7 +135,7 @@ runSourceThread opts src snk sockets socketPool broker =
         modifyMVar_ broker $ onVersionMessage opts msg sockets'
       Nothing -> yield
     case maybeDiscoverMsg of
-      Just msg -> do
+      Just _ -> do
         b <- readMVar broker
         Z.send snk [Z.SendMore] "discover"
         Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode (map (\(B.Service serviceID label description language product' _ configuration)
@@ -148,7 +148,7 @@ runSourceThread opts src snk sockets socketPool broker =
         socketPool' <- readMVar socketPool
 --        (ConfigMsg.ConfigurationMessage serviceID _ )
         forM_ msg (\config
-          -> Z.send (fromJust (M.lookup (B.port $ List.head $ List.filter (\(B.Service serviceID' _ _ _ _ port _) -> (ConfigMsg.serviceID config) == serviceID') services) socketPool')) [] (BS.concat $ BSL.toChunks $ A.encode (config:[])))
+          -> Z.send (fromJust (M.lookup (B.port $ List.head $ List.filter (\(B.Service serviceID' _ _ _ _ _ _) -> (ConfigMsg.serviceID config) == serviceID') services) socketPool')) [] (BS.concat $ BSL.toChunks $ A.encode (config:[])))
       Nothing -> yield
 
 runServiceThread :: Z.Sender a => Options -> Socket a -> MVar SocketPool -> MVar Sockets -> MVar Broker -> Port -> IO ThreadId

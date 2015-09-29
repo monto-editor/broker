@@ -2,9 +2,9 @@
 module Monto.ProductMessage where
 
 import           Data.Aeson.TH
+import           Data.Aeson (Value)
 import           Data.Vector (Vector)
 import qualified Data.Vector as V
-import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Maybe (fromMaybe)
 
@@ -18,7 +18,7 @@ data ProductMessage =
     , source       :: Source
     , product      :: Product
     , language     :: Language
-    , contents     :: Text
+    , contents     :: Value
     , dependencies :: Maybe (Vector ProductDependency)
     } deriving (Eq)
 $(deriveJSON (defaultOptions {

@@ -2,6 +2,7 @@
 module Monto.RegisterServiceRequest where
 
 import           Data.Aeson.TH
+import           Data.Aeson (Value)
 import           Data.Vector (Vector)
 import qualified Data.Vector as V
 import           Data.Text (Text)
@@ -17,7 +18,7 @@ data RegisterServiceRequest =
     , description  :: Text
     , language     :: Language
     , product      :: Product
-    , options      :: Maybe String
+    , options      :: Maybe Value
     , dependencies :: Maybe (Vector String)
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
