@@ -10,8 +10,6 @@ import           Control.Concurrent
 import           Control.Monad
 import           Control.Exception
 
-import           Debug.Trace
-
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BSL
@@ -174,21 +172,23 @@ runServiceThread opts snk socketPool sockets broker port =
 
 findServices :: [ServiceDiscover] -> Broker -> [DiscoverResponse]
 findServices discoverList b =
-  trace "lol" map
+  map
     (\(B.Service serviceID' label' description' language' product' _ configuration')
       -> DiscoverResp.DiscoverResponse serviceID' label' description' language' product' configuration')
     (filter (\(B.Service serviceID' _ _ language' product' _ _)
-      -> any (\(DiscoverReq.ServiceDiscover serviceID'' language'' product'')
-        -> case serviceID'' of
-          Just id' -> trace "ohi" $ id' == serviceID'
-          Nothing -> case language'' of
-            Just lng -> case product'' of
-              Just prod -> prod == product' && lng == language'
-              Nothing -> lng == language'
-            Nothing -> case product'' of
-              Just prod -> prod == product'
-              Nothing -> False)
-        discoverList)
+      -> case List.length discoverList of
+        0 -> True
+        _ -> any (\(DiscoverReq.ServiceDiscover serviceID'' language'' product'')
+          -> case serviceID'' of
+            Just id' -> id' == serviceID'
+            Nothing -> case language'' of
+              Just lng -> case product'' of
+                Just prod -> prod == product' && lng == language'
+                Nothing -> lng == language'
+              Nothing -> case product'' of
+                Just prod -> prod == product'
+                Nothing -> False)
+          discoverList)
       (M.elems $ B.services b))
 
 getServiceIdByPort :: Port -> Broker -> ServiceID
