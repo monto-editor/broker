@@ -180,26 +180,33 @@ onRegisterMessage register regSocket sockets socketPool broker = do
   let serviceID = RQ.serviceID register
   let server = B.Server (RQ.product register) (RQ.language register)
   sockets' <- readMVar sockets
-  let exists = M.lookup server sockets'
-  case exists of
-    Just _ -> do
-      putStrLn $ unwords ["register", T.unpack serviceID, "failed: service with product / language combination already exists"]
-      Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: product/language combination exists" Nothing)))
-    Nothing -> do
-      b <- readMVar broker
-      let exists' = M.lookup serviceID (B.services b)
-      case exists' of
+  b <- readMVar broker
+  let noFreePorts = List.length $ B.portPool b
+  case noFreePorts of
+    0 -> do
+      putStrLn $ unwords ["register", T.unpack serviceID, "failed: no free ports"]
+      Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: no free ports" Nothing)))
+    _ -> do
+      let serverExists = M.lookup server sockets'
+      case serverExists of
         Just _ -> do
-          putStrLn $ unwords ["register", T.unpack serviceID, "failed: service id already exists"]
-          Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: service id exists" Nothing)))
+          putStrLn $ unwords ["register", T.unpack serviceID, "failed: service with product / language combination already exists"]
+          Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: product/language combination exists" Nothing)))
         Nothing -> do
-          putStrLn $ unwords ["register", T.unpack serviceID, "->", "broker"]
-          modifyMVar_ broker (B.registerService register)
-          b' <- readMVar broker
-          let service = fromJust $ M.lookup serviceID (B.services b')
-          socketPool' <- readMVar socketPool
-          modifyMVar_ sockets $ mapInsert server $ fromJust $ (M.lookup (B.port service) socketPool')
-          Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "ok" $ Just $ B.port service)))
+          b <- readMVar broker
+          let serviceIdExists = M.lookup serviceID (B.services b)
+          case serviceIdExists of
+            Just _ -> do
+              putStrLn $ unwords ["register", T.unpack serviceID, "failed: service id already exists"]
+              Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: service id exists" Nothing)))
+            Nothing -> do
+              putStrLn $ unwords ["register", T.unpack serviceID, "->", "broker"]
+              modifyMVar_ broker (B.registerService register)
+              b <- readMVar broker
+              let service = fromJust $ M.lookup serviceID (B.services b)
+              socketPool' <- readMVar socketPool
+              modifyMVar_ sockets $ mapInsert server $ fromJust $ (M.lookup (B.port service) socketPool')
+              Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "ok" $ Just $ B.port service)))
 
 onDeregisterMessage :: Z.Sender a => D.DeregisterService -> MVar Broker -> Socket a -> MVar Sockets -> IO()
 onDeregisterMessage deregMsg broker socket sockets = do
