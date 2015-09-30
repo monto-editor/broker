@@ -10,6 +10,8 @@ import           Control.Concurrent
 import           Control.Monad
 import           Control.Exception
 
+import           Debug.Trace
+
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BSL
@@ -26,7 +28,7 @@ import qualified Monto.Broker as B
 import           Monto.ConfigurationMessage (ConfigurationMessage)
 import qualified Monto.ConfigurationMessage as ConfigMsg
 import qualified Monto.DeregisterService as D
-import           Monto.DiscoverRequest (DiscoverRequest)
+import           Monto.DiscoverRequest (DiscoverRequest, ServiceDiscover)
 import qualified Monto.DiscoverRequest as DiscoverReq
 import           Monto.DiscoverResponse (DiscoverResponse)
 import qualified Monto.DiscoverResponse as DiscoverResp
@@ -126,8 +128,8 @@ runSourceThread opts src snk sockets socketPool broker =
   forkIO $ forever $ do
     rawMsg <- Z.receive src
     let maybeVersionMsg = (A.decodeStrict rawMsg) :: Maybe VersionMessage
-    let maybeDiscoverMsg = (A.decodeStrict rawMsg) :: Maybe [DiscoverRequest]
-    let maybeConfigMsg = (A.decodeStrict rawMsg) :: Maybe [ConfigurationMessage]
+    let maybeDiscoverMsg = (A.decodeStrict rawMsg) :: Maybe DiscoverRequest
+    let maybeConfigMsg = (A.decodeStrict rawMsg) :: Maybe ConfigurationMessage
     case maybeVersionMsg of
       Just msg -> do
         when (debug opts) $ putStrLn $ unwords ["version", T.unpack (V.source msg),"->", "broker"]
@@ -135,11 +137,10 @@ runSourceThread opts src snk sockets socketPool broker =
         modifyMVar_ broker $ onVersionMessage opts msg sockets'
       Nothing -> yield
     case maybeDiscoverMsg of
-      Just _ -> do
-        b <- readMVar broker
+      Just msg -> do
         Z.send snk [Z.SendMore] "discover"
-        Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode (map (\(B.Service serviceID label description language product' _ configuration)
-          -> DiscoverResp.DiscoverResponse serviceID label description language product' configuration) (M.elems (B.services b)))
+        b <- readMVar broker
+        Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode $ findServices (DiscoverReq.discoverServices msg) b
       Nothing -> yield
     case maybeConfigMsg of
       Just msg -> do
@@ -147,7 +148,7 @@ runSourceThread opts src snk sockets socketPool broker =
         let services = M.elems $ B.services broker'
         socketPool' <- readMVar socketPool
 --        (ConfigMsg.ConfigurationMessage serviceID _ )
-        forM_ msg (\config
+        forM_ (ConfigMsg.configureServices msg) (\config
           -> Z.send (fromJust (M.lookup (B.port $ List.head $ List.filter (\(B.Service serviceID' _ _ _ _ _ _) -> (ConfigMsg.serviceID config) == serviceID') services) socketPool')) [] (BS.concat $ BSL.toChunks $ A.encode (config:[])))
       Nothing -> yield
 
@@ -170,6 +171,25 @@ runServiceThread opts snk socketPool sockets broker port =
             when (debug opts) $ putStrLn $ unwords [T.unpack serviceID, T.unpack (P.source msg'), "->", "broker"]
             sockets' <- readMVar sockets
             modifyMVar_ broker $ onProductMessage opts msg' sockets'
+
+findServices :: [ServiceDiscover] -> Broker -> [DiscoverResponse]
+findServices discoverList b =
+  trace "lol" map
+    (\(B.Service serviceID' label' description' language' product' _ configuration')
+      -> DiscoverResp.DiscoverResponse serviceID' label' description' language' product' configuration')
+    (filter (\(B.Service serviceID' _ _ language' product' _ _)
+      -> any (\(DiscoverReq.ServiceDiscover serviceID'' language'' product'')
+        -> case serviceID'' of
+          Just id' -> trace "ohi" $ id' == serviceID'
+          Nothing -> case language'' of
+            Just lng -> case product'' of
+              Just prod -> prod == product' && lng == language'
+              Nothing -> lng == language'
+            Nothing -> case product'' of
+              Just prod -> prod == product'
+              Nothing -> False)
+        discoverList)
+      (M.elems $ B.services b))
 
 getServiceIdByPort :: Port -> Broker -> ServiceID
 getServiceIdByPort port broker =
