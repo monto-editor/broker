@@ -179,18 +179,31 @@ onRegisterMessage :: Z.Sender a => RQ.RegisterServiceRequest -> Socket a -> MVar
 onRegisterMessage register regSocket sockets socketPool broker = do
   let serviceID = RQ.serviceID register
   let server = B.Server (RQ.product register) (RQ.language register)
-  putStrLn $ unwords ["register", T.unpack serviceID, "->", "broker"]
-  modifyMVar_ broker (B.registerService register)
-  b <- readMVar broker
-  let service = fromJust $ M.lookup serviceID (B.services b)
-  socketPool' <- readMVar socketPool
-  modifyMVar_ sockets $ mapInsert server $ fromJust $ (M.lookup (B.port service) socketPool')
-  Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "ok" $ Just $ B.port service)))
+  sockets' <- readMVar sockets
+  let exists = M.lookup server sockets'
+  case exists of
+    Just _ -> do
+      putStrLn $ unwords ["register", T.unpack serviceID, "failed: service with product / language combination already exists"]
+      Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: product/language combination exists" Nothing)))
+    Nothing -> do
+      b <- readMVar broker
+      let exists' = M.lookup serviceID (B.services b)
+      case exists' of
+        Just _ -> do
+          putStrLn $ unwords ["register", T.unpack serviceID, "failed: service id already exists"]
+          Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: service id exists" Nothing)))
+        Nothing -> do
+          putStrLn $ unwords ["register", T.unpack serviceID, "->", "broker"]
+          modifyMVar_ broker (B.registerService register)
+          b' <- readMVar broker
+          let service = fromJust $ M.lookup serviceID (B.services b')
+          socketPool' <- readMVar socketPool
+          modifyMVar_ sockets $ mapInsert server $ fromJust $ (M.lookup (B.port service) socketPool')
+          Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "ok" $ Just $ B.port service)))
 
 onDeregisterMessage :: Z.Sender a => D.DeregisterService -> MVar Broker -> Socket a -> MVar Sockets -> IO()
 onDeregisterMessage deregMsg broker socket sockets = do
   putStrLn $ unwords ["deregister", T.unpack (D.deregisterServiceID deregMsg), "->", "broker"]
-  modifyMVar_ broker (B.deregisterService (D.deregisterServiceID deregMsg))
   Z.send socket [] ""
   let serviceID = D.deregisterServiceID deregMsg
 
@@ -198,6 +211,7 @@ onDeregisterMessage deregMsg broker socket sockets = do
   let maybeService = M.lookup serviceID $ B.services broker'
   case maybeService of
     Just service -> do
+      modifyMVar_ broker (B.deregisterService (D.deregisterServiceID deregMsg))
       let server = B.Server (B.product service) (B.language service)
       modifyMVar_ sockets $ mapRemove server
     Nothing -> yield
