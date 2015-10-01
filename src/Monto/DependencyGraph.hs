@@ -2,9 +2,10 @@ module Monto.DependencyGraph where
 
 import           Data.Graph.Inductive (Gr,Node)
 import qualified Data.Graph.Inductive as G
+import           Data.List (mapAccumR)
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.List (mapAccumR)
+import           Data.Maybe
 
 data Dependency dep
   = Dependency dep
@@ -58,6 +59,13 @@ register from to gr =
   in gr''
     { dependencies = dependencies''
     }
+
+deregister :: Ord dep => dep -> DependencyGraph dep -> DependencyGraph dep
+deregister dep gr = fromMaybe gr $ do
+  node <- M.lookup (Dependency dep) (nodeMap gr)
+  return $ gr { dependencies = G.delNode node (dependencies gr)
+              , nodeMap = M.delete (Dependency dep) (nodeMap gr)
+              }
 
 registerDependency :: Ord dep => DependencyGraph dep -> Dependency dep -> (DependencyGraph dep,Node)
 {-# INLINE registerDependency #-}
