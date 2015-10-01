@@ -29,7 +29,7 @@ import           Control.Applicative hiding (empty)
 import           Control.Monad (guard)
 
 import           Data.Aeson (Value)
-import           Data.Maybe (fromJust,fromMaybe,isJust,catMaybes)
+import           Data.Maybe
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.List as List
@@ -132,36 +132,42 @@ empty from to = Broker
 
 printBroker :: Broker -> IO()
 printBroker broker = do
-  putStrLn $ show (services broker)
-  putStrLn $ show (portPool broker)
+  print (services broker)
+  print (portPool broker)
 
-registerService :: RegisterServiceRequest -> Broker -> IO Broker
+registerService :: RegisterServiceRequest -> Broker -> Broker
 {-# INLINE registerService #-}
 registerService register broker =
   let serviceID' = RQ.serviceID register
       server' = Server (RQ.product register) (RQ.language register)
       deps = (map read $ Vector.toList $ fromJust $ RQ.dependencies register)
       portPool' = tail (portPool broker)
-      services' = M.insert serviceID' (Service serviceID'(RQ.label register) (RQ.description register) (RQ.language register) (RQ.product register) (head (portPool broker)) (RQ.options register)) (services broker)
+      service = Service serviceID'
+                        (RQ.label register)
+                        (RQ.description register)
+                        (RQ.language register)
+                        (RQ.product register)
+                        (head (portPool broker))
+                        (RQ.options register)
+      services' = M.insert serviceID' service (services broker)
       serviceDependencies' = DG.register server' deps (serviceDependencies broker)
-  in return broker
+  in broker
   { serviceDependencies = serviceDependencies'
   , automaton = updateAutomaton (DG.dependencies serviceDependencies')
   , services = services'
   , portPool = portPool'
   }
 
-deregisterService :: ServiceID -> Broker -> IO Broker
+deregisterService :: ServiceID -> Broker -> Broker
 {-# INLINE deregisterService #-}
-deregisterService serviceID' broker =
-  let service = M.lookup serviceID' (services broker)
-  in case service of
-    Just service' ->
-      return broker
-      { services = M.delete serviceID' (services broker)
-      , portPool = List.insert (port service') (portPool broker)
-      }
-    Nothing -> return broker
+deregisterService serviceID' broker = fromMaybe broker $ do
+  service <- M.lookup serviceID' (services broker)
+  let server = Server (product service) (language service)
+  return broker
+    { services = M.delete serviceID' (services broker)
+    , portPool = List.insert (port service) (portPool broker)
+    , serviceDependencies = DG.deregister server (serviceDependencies broker)
+    }
 
 
 registerProductDep :: ProductDependency -> [ProductDependency] -> Broker -> ([Source],Broker)
@@ -173,7 +179,7 @@ registerProductDep from to broker =
           Product (src,_,_) -> src
       broker' = broker { productDependencies = productDependencies' }
       srcs'   = flip filter srcs $ \src ->
-                  not $ isJust $ R.lookupVersionMessage src (resourceMgr broker)
+                  isNothing $ R.lookupVersionMessage src (resourceMgr broker)
   in (srcs',broker')
 
 updateAutomaton :: Ord dep => Gr dep () -> Automaton (Map dep L) dep (Set dep)
@@ -208,7 +214,7 @@ newVersion version broker =
         { processes   = M.insert (V.source version) process' (processes broker)
         , resourceMgr = snd $ R.updateVersion version $ resourceMgr broker
         }
-  in (catMaybes $ map (\(Dependency (Server prod lang)) -> makeResponse broker' (V.source version) prod lang) (S.toList res),broker')
+  in (mapMaybe (\(Dependency (Server prod lang)) -> makeResponse broker' (V.source version) prod lang) (S.toList res),broker')
 
 newProduct :: ProductMessage -> Broker -> ([Response],Broker)
 {-# INLINE newProduct #-}
@@ -235,7 +241,7 @@ makeResponse broker source product' language' =
   let sdeps = lookupDependencies (Dependency (Server product' language')) (serviceDependencies broker)
       pdeps = lookupDependencies (Dependency (Product (source,language',product'))) (productDependencies broker)
       deps = map (depForServer source) sdeps ++ map (\(Dependency p) -> p) pdeps
-      msgs = catMaybes $ map (lookupDependency broker) deps
+      msgs = mapMaybe (lookupDependency broker) deps
   in if all isJust $ map (\(Dependency p) -> lookupDependency broker p) pdeps
       then Just $ Response source (Server product' language') msgs
       else Nothing
