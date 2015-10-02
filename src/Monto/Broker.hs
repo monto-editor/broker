@@ -166,7 +166,7 @@ deregisterService serviceID' broker = fromMaybe broker $ do
   return broker
     { services = M.delete serviceID' (services broker)
     , portPool = List.insert (port service) (portPool broker)
-    , serviceDependencies = DG.deregister server (serviceDependencies broker)
+--    , serviceDependencies = DG.deregister server (serviceDependencies broker)
     }
 
 

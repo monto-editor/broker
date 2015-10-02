@@ -55,8 +55,8 @@ data Options = Options
 options :: Parser Options
 options = Options
   <$> switch      (short 'd' <> long "debug"        <> help "print messages that are transmitted over the broker")
-  <*> strOption   (short 'c' <> long "sink"         <> help "address of the sink")
-  <*> strOption   (short 'k' <> long "source"       <> help "address of the source")
+  <*> strOption   (short 'k' <> long "sink"         <> help "address of the sink")
+  <*> strOption   (short 'c' <> long "source"       <> help "address of the source")
   <*> strOption   (short 'r' <> long "registration" <> help "address for service registration")
   <*> option auto (short 'f' <> long "servicesFrom" <> help "port from which on services can connect")
   <*> option auto (short 't' <> long "servicesTo"   <> help "port to which services can connect")
@@ -108,10 +108,10 @@ runServer opts ctx src snk = do
       let maybeDeregister = A.decodeStrict rawMsg :: Maybe D.DeregisterService
       let maybeRegister = A.decodeStrict rawMsg :: Maybe RQ.RegisterServiceRequest
       case maybeDeregister of
-        Just deregister -> onDeregisterMessage deregister broker regSocket
+        Just deregister -> onDeregisterMessage deregister broker regSocket snk
         Nothing -> yield
       case maybeRegister of
-        Just register -> onRegisterMessage register regSocket broker
+        Just register -> onRegisterMessage register regSocket broker snk
         Nothing -> yield
 
     _ <- readMVar interrupted
@@ -194,8 +194,8 @@ getServiceIdByPort :: Port -> Broker -> ServiceID
 getServiceIdByPort port broker =
   B.serviceID (List.head (List.filter (\service -> B.port service == port) (M.elems (B.services broker))))
 
-onRegisterMessage :: Z.Sender a => RQ.RegisterServiceRequest -> Socket a -> MVar Broker -> IO()
-onRegisterMessage register regSocket broker = do
+onRegisterMessage :: Z.Sender a => Z.Sender b => RQ.RegisterServiceRequest -> Socket a -> MVar Broker -> Socket b -> IO()
+onRegisterMessage register regSocket broker snk= do
   let serviceID = RQ.serviceID register
   b <- readMVar broker
   let noFreePorts = List.length $ B.portPool b
@@ -214,14 +214,16 @@ onRegisterMessage register regSocket broker = do
           modifyMVar_ broker (return . B.registerService register)
           b' <- readMVar broker
           case M.lookup serviceID (B.services b') of
-            Just service ->
+            Just service -> do
               Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "ok" $ Just $ B.port service)))
+              Z.send snk [Z.SendMore] "discover"
+              Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode $ findServices [] b'
             Nothing -> do
               putStrLn $ unwords ["register", T.unpack serviceID, "failed: service did not register correctly"]
               Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: service did not register correctly" Nothing)))
 
-onDeregisterMessage :: Z.Sender a => D.DeregisterService -> MVar Broker -> Socket a -> IO()
-onDeregisterMessage deregMsg broker socket = do
+onDeregisterMessage :: Z.Sender a => Z.Sender b => D.DeregisterService -> MVar Broker -> Socket a -> Socket b -> IO()
+onDeregisterMessage deregMsg broker socket snk = do
   putStrLn $ unwords ["deregister", T.unpack (D.deregisterServiceID deregMsg), "->", "broker"]
   Z.send socket [] ""
   let serviceID = D.deregisterServiceID deregMsg
@@ -229,8 +231,11 @@ onDeregisterMessage deregMsg broker socket = do
   broker' <- readMVar broker
   let maybeService = M.lookup serviceID $ B.services broker'
   case maybeService of
-    Just _ ->
+    Just _ -> do
       modifyMVar_ broker (return . B.deregisterService (D.deregisterServiceID deregMsg))
+      Z.send snk [Z.SendMore] "discover"
+      b <- readMVar broker
+      Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode $ findServices [] b
     Nothing -> yield
 
 onVersionMessage :: Options -> VersionMessage -> SocketPool -> Broker -> IO Broker
