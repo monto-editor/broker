@@ -134,9 +134,7 @@ runSourceThread opts src snk socketPool broker =
       Nothing -> yield
     case maybeDiscoverMsg of
       Just msg -> do
-        Z.send snk [Z.SendMore] "discover"
-        b <- readMVar broker
-        Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode $ findServices (DiscoverReq.discoverServices msg) b
+        sendDiscoverResponse snk broker $ DiscoverReq.discoverServices msg
       Nothing -> yield
     case maybeConfigMsg of
       Just msg -> do
@@ -148,6 +146,12 @@ runSourceThread opts src snk socketPool broker =
           in Z.send (fromJust (M.lookup (B.port service) socketPool')) []
                   $ BS.concat $ BSL.toChunks $ A.encode [config]
       Nothing -> yield
+
+sendDiscoverResponse :: Z.Sender a => Socket a -> MVar Broker -> [ServiceDiscover] -> IO()
+sendDiscoverResponse snk broker discoverFilterList= do
+  Z.send snk [Z.SendMore] "discover"
+  b <- readMVar broker
+  Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode $ findServices discoverFilterList b
 
 runServiceThread :: Z.Sender a => Options -> Socket a -> MVar SocketPool -> MVar Broker -> Port -> IO ThreadId
 runServiceThread opts snk socketPool broker port =
@@ -194,6 +198,10 @@ getServiceIdByPort :: Port -> Broker -> ServiceID
 getServiceIdByPort port broker =
   B.serviceID (List.head (List.filter (\service -> B.port service == port) (M.elems (B.services broker))))
 
+sendRegisterServiceResponse :: Z.Sender a => Socket a -> T.Text -> Maybe Int -> IO ()
+sendRegisterServiceResponse socket text port =
+  Z.send socket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse text port)))
+
 onRegisterMessage :: Z.Sender a => Z.Sender b => RQ.RegisterServiceRequest -> Socket a -> MVar Broker -> Socket b -> IO()
 onRegisterMessage register regSocket broker snk= do
   let serviceID = RQ.serviceID register
@@ -202,25 +210,24 @@ onRegisterMessage register regSocket broker snk= do
   case noFreePorts of
     0 -> do
       putStrLn $ unwords ["register", T.unpack serviceID, "failed: no free ports"]
-      Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: no free ports" Nothing)))
+      sendRegisterServiceResponse regSocket "failed: no free ports" Nothing
     _ -> do
       let serviceIdExists = M.lookup serviceID (B.services b)
       case serviceIdExists of
         Just _ -> do
           putStrLn $ unwords ["register", T.unpack serviceID, "failed: service id already exists"]
-          Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: service id exists" Nothing)))
+          sendRegisterServiceResponse regSocket "failed: service id exists" Nothing
         Nothing -> do
           putStrLn $ unwords ["register", T.unpack serviceID, "->", "broker"]
           modifyMVar_ broker (return . B.registerService register)
           b' <- readMVar broker
           case M.lookup serviceID (B.services b') of
             Just service -> do
-              Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "ok" $ Just $ B.port service)))
-              Z.send snk [Z.SendMore] "discover"
-              Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode $ findServices [] b'
+              sendRegisterServiceResponse regSocket "ok" $ Just $ B.port service
+              sendDiscoverResponse snk broker []
             Nothing -> do
               putStrLn $ unwords ["register", T.unpack serviceID, "failed: service did not register correctly"]
-              Z.send regSocket [] (BS.concat $ BSL.toChunks (A.encode (RS.RegisterServiceResponse "failed: service did not register correctly" Nothing)))
+              sendRegisterServiceResponse regSocket "failed: service did not register correctly" Nothing
 
 onDeregisterMessage :: Z.Sender a => Z.Sender b => D.DeregisterService -> MVar Broker -> Socket a -> Socket b -> IO()
 onDeregisterMessage deregMsg broker socket snk = do
@@ -233,9 +240,7 @@ onDeregisterMessage deregMsg broker socket snk = do
   case maybeService of
     Just _ -> do
       modifyMVar_ broker (return . B.deregisterService (D.deregisterServiceID deregMsg))
-      Z.send snk [Z.SendMore] "discover"
-      b <- readMVar broker
-      Z.send snk [] $ BS.concat $ BSL.toChunks $ A.encode $ findServices [] b
+      sendDiscoverResponse snk broker []
     Nothing -> yield
 
 onVersionMessage :: Options -> VersionMessage -> SocketPool -> Broker -> IO Broker
