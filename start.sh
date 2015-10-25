@@ -1,5 +1,5 @@
 trap "kill -- -$$" 2
-java -jar websockets/dist/broker-websockets.jar &
+$JAVA_HOME/bin/java -jar websockets/dist/broker-websockets.jar &
 ./dist/build/broker/broker \
 	--debug \
 	--source 'tcp://*:5000' \
