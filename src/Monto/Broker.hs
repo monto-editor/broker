@@ -112,6 +112,7 @@ data Broker = Broker
   , processes           :: Map Source (Process (Map ServerDependency L) ServerDependency (Set ServerDependency))
   , services            :: Map ServiceID Service
   , portPool            :: [Port]
+  , serviceOnPort       :: Map Port ServiceID
   } deriving (Eq,Show)
 
 empty :: Int -> Int -> Broker
@@ -128,6 +129,7 @@ empty from to = Broker
   , processes = M.empty
   , services = M.empty
   , portPool = [from..to]
+  , serviceOnPort = M.empty
   }
 
 printBroker :: Broker -> IO()
@@ -138,7 +140,8 @@ printBroker broker = do
 registerService :: RegisterServiceRequest -> Broker -> Broker
 {-# INLINE registerService #-}
 registerService register broker =
-  let serviceID' = RQ.serviceID register
+  let port' = (head (portPool broker))
+      serviceID' = RQ.serviceID register
       server' = Server (RQ.product register) (RQ.language register)
       deps = (map read $ Vector.toList $ fromJust $ RQ.dependencies register)
       portPool' = tail (portPool broker)
@@ -147,26 +150,29 @@ registerService register broker =
                         (RQ.description register)
                         (RQ.language register)
                         (RQ.product register)
-                        (head (portPool broker))
+                        port'
                         (RQ.options register)
       services' = M.insert serviceID' service (services broker)
       serviceDependencies' = DG.register server' deps (serviceDependencies broker)
+      serviceOnPort' = M.insert port' serviceID' (serviceOnPort broker)
   in broker
   { serviceDependencies = serviceDependencies'
   , automaton = updateAutomaton (DG.dependencies serviceDependencies')
   , services = services'
   , portPool = portPool'
+  , serviceOnPort = serviceOnPort'
   }
 
 deregisterService :: ServiceID -> Broker -> Broker
 {-# INLINE deregisterService #-}
 deregisterService serviceID' broker = fromMaybe broker $ do
   service <- M.lookup serviceID' (services broker)
-  let server = Server (product service) (language service)
+--  let server = Server (product service) (language service)
   return broker
     { services = M.delete serviceID' (services broker)
     , portPool = List.insert (port service) (portPool broker)
 --    , serviceDependencies = DG.deregister server (serviceDependencies broker)
+    , serviceOnPort = M.delete (port service) (serviceOnPort broker)
     }
 
 
