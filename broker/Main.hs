@@ -1,14 +1,12 @@
 {-# LANGUAGE OverloadedStrings,ScopedTypeVariables #-}
 module Main where
 
-import           System.ZMQ4 (Pair,Context,Pub,Sub,Socket)
+import           System.ZMQ4 (Pair,Context,Socket,Pub)
 import qualified System.ZMQ4 as Z hiding (message,source)
 import           System.Posix.Signals (installHandler, Handler(Catch), sigINT, sigTERM)
 
---import           Control.Applicative
 import           Control.Concurrent
 import           Control.Monad
-import           Control.Exception
 
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
@@ -49,6 +47,8 @@ data Options = Options
   , sink          :: Addr
   , source        :: Addr
   , registration  :: Addr
+  , discovery     :: Addr
+  , config        :: Addr
   , fromPort      :: Int
   , toPort        :: Int
   }
@@ -59,6 +59,8 @@ options = Options
   <*> strOption   (short 'k' <> long "sink"         <> help "address of the sink")
   <*> strOption   (short 'c' <> long "source"       <> help "address of the source")
   <*> strOption   (short 'r' <> long "registration" <> help "address for service registration")
+  <*> strOption   (short 'i' <> long "discovery"    <> help "address for service discovery")
+  <*> strOption   (short 'o' <> long "config"       <> help "address for service configurations")
   <*> option auto (short 'f' <> long "servicesFrom" <> help "port from which on services can connect")
   <*> option auto (short 't' <> long "servicesTo"   <> help "port to which services can connect")
 
@@ -69,100 +71,108 @@ main = do
     <> progDesc "Monto Broker"
     )
   Z.withContext $ \ctx ->
-        run opts ctx
+    Z.withSocket ctx Z.Pub $ \snk -> do
+      Z.bind snk $ sink opts
+      putStrLn $ unwords ["publish all products to sink on address", sink opts]
+      run opts ctx snk
 
-run :: Options -> Context -> IO()
-run opts ctx = do
-  Z.withSocket ctx Z.Sub $ \src -> do
-   Z.bind src $ source opts
-   Z.subscribe src ""
-   putStrLn $ unwords ["listen on address", show $ source opts, "for versions"]
-
-   Z.withSocket ctx Z.Pub $ \snk -> do
-     Z.bind snk $ sink opts
-     putStrLn $ unwords ["publish all products to sink on address", show $ sink opts]
-     runServer opts ctx src snk
-
-runServer :: Options -> Context -> Socket Sub -> Socket Pub -> IO ()
-runServer opts ctx src snk = do
+run :: Options -> Context -> Socket Pub -> IO ()
+run opts ctx snk = do
   interrupted <- newEmptyMVar
-  let broker = B.empty (fromPort opts) (toPort opts)
-  appstate <- newMVar (broker, M.empty)
-  threads <- forM (B.portPool broker) $ runServiceThread opts snk appstate
-
   let stopExcecution = putMVar interrupted Interrupted
   _ <- installHandler sigINT  (Catch stopExcecution) Nothing
   _ <- installHandler sigTERM (Catch stopExcecution) Nothing
 
-  Z.withSocket ctx Z.Rep $ \regSocket -> do
+  let broker = B.empty (fromPort opts) (toPort opts)
+  appstate <- newMVar (broker, M.empty)
+  sourceThread <- runSourceThread opts ctx appstate
+  registerThread <- runRegisterThread opts ctx appstate
+  discoverThread <- runDiscoverThread opts ctx appstate
+  configThread <- runConfigThread opts ctx appstate
+  threads <- forM (B.portPool broker) $ runServiceThread opts ctx snk appstate
 
-    Z.bind regSocket (registration opts) `catch` \(e :: SomeException) -> do
-      putStrLn $ unwords ["couldn't bind address", registration opts, "for registrations"]
-      _ <- throw e
-      putStrLn $ unwords ["listen on address", registration opts, "for registrations"]
+  _ <- readMVar interrupted
+  forM_ threads killThread
+  killThread configThread
+  killThread discoverThread
+  killThread registerThread
+  killThread sourceThread
 
-    sourceThread <- runSourceThread opts src snk appstate
-    registerThread <- forkIO $ forever $ do
-      rawMsg <- Z.receive regSocket
+runSourceThread :: Options -> Context -> MVar AppState -> IO ThreadId
+runSourceThread opts ctx appstate = forkIO $
+  Z.withSocket ctx Z.Sub $ \src -> do
+    Z.bind src $ source opts
+    Z.subscribe src ""
+    putStrLn $ unwords ["listen on address", source opts, "for versions"]
+    forever $ do
+      rawMsg <- Z.receive src
+      case (A.decodeStrict rawMsg :: Maybe VersionMessage) of
+        Just msg -> do
+          when (debug opts) $ putStrLn $ unwords ["version", T.unpack (V.source msg),"->", "broker"]
+          modifyMVar_ appstate $ onVersionMessage opts msg
+        Nothing -> putStrLn "message is not a version message"
+
+runRegisterThread :: Options -> Context -> MVar AppState -> IO ThreadId
+runRegisterThread opts ctx appstate = forkIO $
+  Z.withSocket ctx Z.Rep $ \socket -> do
+    Z.bind socket (registration opts)
+    putStrLn $ unwords ["listen on address", registration opts, "for registrations"]
+    forever $ do
+      rawMsg <- Z.receive socket
       let maybeRegister = A.decodeStrict rawMsg :: Maybe RQ.RegisterServiceRequest
       let maybeDeregister = A.decodeStrict rawMsg :: Maybe D.DeregisterService
       case (maybeRegister, maybeDeregister) of
-        (Just register, Nothing) -> modifyMVar_ appstate $ onRegisterMessage register regSocket snk
-        (Nothing, Just deregister) -> modifyMVar_ appstate $ onDeregisterMessage deregister regSocket snk
+        (Just msg, Nothing) -> modifyMVar_ appstate $ onRegisterMessage msg socket
+        (Nothing, Just msg) -> modifyMVar_ appstate $ onDeregisterMessage msg socket
         (Nothing, Nothing) -> putStrLn "message is not a register request nor a deregister message"
         (_, _) -> putStrLn "couldn't distinguish between register request and deregister message"
 
-    _ <- readMVar interrupted
-    forM_ threads killThread
-    killThread registerThread
-    killThread sourceThread
+runDiscoverThread :: Options -> Context -> MVar AppState -> IO ThreadId
+runDiscoverThread opts ctx appstate = forkIO $
+  Z.withSocket ctx Z.Rep $ \discSocket -> do
+    Z.bind discSocket (discovery opts)
+    putStrLn $ unwords ["listen on address", discovery opts, "for discover requests"]
+    forever $ do
+      rawMsg <- Z.receive discSocket
+      case (A.decodeStrict rawMsg :: Maybe DiscoverRequest) of
+        Just msg -> do
+          (broker, _) <- readMVar appstate
+          Z.send discSocket [] $ convertBslToBs $ A.encode $ findServices (DiscoverReq.discoverServices msg) broker
+        Nothing -> putStrLn "couldn't parse discover request"
 
-runSourceThread :: Z.Receiver a => Z.Sender b => Options -> Socket a -> Socket b -> MVar AppState -> IO ThreadId
-runSourceThread opts src snk appstate =
-  forkIO $ forever $ do
-    rawMsg <- Z.receive src
-    let maybeVersionMsg = (A.decodeStrict rawMsg) :: Maybe VersionMessage
-    let maybeDiscoverMsg = (A.decodeStrict rawMsg) :: Maybe DiscoverRequest
-    let maybeConfigMsg = (A.decodeStrict rawMsg) :: Maybe ConfigurationMessage
-    case (maybeVersionMsg, maybeDiscoverMsg, maybeConfigMsg) of
-      (Just msg, Nothing, Nothing) -> do
-        when (debug opts) $ putStrLn $ unwords ["version", T.unpack (V.source msg),"->", "broker"]
-        modifyMVar_ appstate $ onVersionMessage opts msg
-      (Nothing, Just msg, Nothing) -> do
-        (broker, _) <- readMVar appstate
-        sendDiscoverResponse snk broker $ DiscoverReq.discoverServices msg
-      (Nothing, Nothing, Just msg) -> do
-        (broker, socketPool) <- readMVar appstate
-        let services = M.elems $ B.services broker
-        forM_ (ConfigMsg.configureServices msg) $ \config ->
-          let service = head $ filter (\s -> ConfigMsg.serviceID config == B.serviceID s) services
-          in Z.send (fromJust $ M.lookup (B.port service) socketPool) [] $ convertBslToBs $ A.encode [config]
-      (Nothing, Nothing, Nothing) -> putStrLn "message is not a version message nor a discover request nor a config message"
-      (_, _, _) -> putStrLn "couldn't distinguish between version message, discover request and config message"
+runConfigThread :: Options -> Context -> MVar AppState -> IO ThreadId
+runConfigThread opts ctx appstate = forkIO $
+  Z.withSocket ctx Z.Sub $ \configSocket -> do
+    Z.bind configSocket $ config opts
+    Z.subscribe configSocket ""
+    putStrLn $ unwords ["listen on address", config opts, "for config messages"]
+    forever $ do
+      rawMsg <- Z.receive configSocket
+      case (A.decodeStrict rawMsg :: Maybe ConfigurationMessage) of
+        Just msg -> do
+          (broker, socketPool) <- readMVar appstate
+          let services = M.elems $ B.services broker
+          forM_ (ConfigMsg.configureServices msg) $ \configuration ->
+            let service = head $ filter (\s -> ConfigMsg.serviceID configuration == B.serviceID s) services
+            in Z.send (fromJust $ M.lookup (B.port service) socketPool) [] $ convertBslToBs $ A.encode [configuration]
+        Nothing -> putStrLn "message is not a configuration message"
 
-sendDiscoverResponse :: Z.Sender a => Socket a -> Broker -> [ServiceDiscover] -> IO()
-sendDiscoverResponse snk broker discoverFilterList= do
-  Z.send snk [Z.SendMore] "discover"
-  Z.send snk [] $ convertBslToBs $ A.encode $ findServices discoverFilterList broker
-
-runServiceThread :: Z.Sender a => Options -> Socket a -> MVar AppState -> Port -> IO ThreadId
-runServiceThread opts snk appstate port =
-  forkIO $
-    Z.withContext $ \ctx ->
-      Z.withSocket ctx Z.Pair $ \sckt -> do
-        Z.bind sckt ("tcp://*:" ++ show port)
-        putStrLn $ unwords ["listen on address", "tcp://*:" ++ show port]
-        modifyMVar_ appstate $ \(broker, socketPool) -> return (broker, M.insert port sckt socketPool)
-        forever $ do
-          rawMsg <- Z.receive sckt
-          (broker', _) <- readMVar appstate
-          let serviceID = getServiceIdByPort port broker'
-          Z.send snk [Z.SendMore] (TextEnc.encodeUtf8 serviceID)
-          Z.send snk [] rawMsg
-          let msg = A.decodeStrict rawMsg
-          for_ msg $ \msg' -> do
-            when (debug opts) $ putStrLn $ unwords [T.unpack serviceID, T.unpack (P.source msg'), "->", "broker"]
-            modifyMVar_ appstate $ onProductMessage opts msg'
+runServiceThread :: Options -> Context -> Socket Pub -> MVar AppState -> Port -> IO ThreadId
+runServiceThread opts ctx snk appstate port = forkIO $
+  Z.withSocket ctx Z.Pair $ \sckt -> do
+    Z.bind sckt ("tcp://*:" ++ show port)
+    putStrLn $ unwords ["listen on address", "tcp://*:" ++ show port]
+    modifyMVar_ appstate $ \(broker, socketPool) -> return (broker, M.insert port sckt socketPool)
+    forever $ do
+      rawMsg <- Z.receive sckt
+      (broker', _) <- readMVar appstate
+      let serviceID = getServiceIdByPort port broker'
+      let msg = A.decodeStrict rawMsg
+      for_ msg $ \msg' -> do
+        Z.send snk [Z.SendMore] (BS.concat [(TextEnc.encodeUtf8 $ P.source msg'), (TextEnc.encodeUtf8 " "), (TextEnc.encodeUtf8 serviceID)])
+        Z.send snk [] rawMsg
+        when (debug opts) $ putStrLn $ unwords [T.unpack serviceID, T.unpack (P.source msg'), "->", "broker"]
+        modifyMVar_ appstate $ onProductMessage opts msg'
 
 findServices :: [ServiceDiscover] -> Broker -> [DiscoverResponse]
 findServices discoverList b =
@@ -188,8 +198,8 @@ sendRegisterServiceResponse :: Z.Sender a => Socket a -> T.Text -> Maybe Int -> 
 sendRegisterServiceResponse socket text port =
   Z.send socket [] $ convertBslToBs $ A.encode $ RS.RegisterServiceResponse text port
 
-onRegisterMessage :: Z.Sender a => Z.Sender b => RQ.RegisterServiceRequest -> Socket a -> Socket b -> AppState -> IO AppState
-onRegisterMessage register regSocket snk (broker, socketPool) = do
+onRegisterMessage :: Z.Sender a => RQ.RegisterServiceRequest -> Socket a -> AppState -> IO AppState
+onRegisterMessage register regSocket (broker, socketPool) = do
   let serviceID = RQ.serviceID register
   case List.length $ B.portPool broker of
     0 -> do
@@ -209,20 +219,18 @@ onRegisterMessage register regSocket snk (broker, socketPool) = do
           case M.lookup serviceID (B.services broker') of
             Just service -> do
               sendRegisterServiceResponse regSocket "ok" $ Just $ B.port service
-              sendDiscoverResponse snk broker' []
             Nothing -> do
               putStrLn $ unwords ["register", T.unpack serviceID, "failed: service did not register correctly"]
               sendRegisterServiceResponse regSocket "failed: service did not register correctly" Nothing
           return (broker', socketPool)
 
-onDeregisterMessage :: Z.Sender a => Z.Sender b => D.DeregisterService -> Socket a -> Socket b -> AppState -> IO AppState
-onDeregisterMessage deregMsg socket snk (broker, socketPool)= do
+onDeregisterMessage :: Z.Sender a => D.DeregisterService -> Socket a -> AppState -> IO AppState
+onDeregisterMessage deregMsg socket (broker, socketPool)= do
   putStrLn $ unwords ["deregister", T.unpack (D.deregisterServiceID deregMsg), "->", "broker"]
   Z.send socket [] ""
   case M.lookup (D.deregisterServiceID deregMsg) $ B.services broker of
     Just _ -> do
       let broker' = B.deregisterService (D.deregisterServiceID deregMsg) broker
-      sendDiscoverResponse snk broker' []
       return (broker', socketPool)
     Nothing -> return (broker, socketPool)
 

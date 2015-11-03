@@ -8,18 +8,21 @@ import org.zeromq.ZMQ;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
 
 public class WebSocketSubscriberProxy extends WebSocketServer {
 
     private ZContext context;
     private ZMQ.Socket socket;
-    private WebSocket webSocket;
+    private List<WebSocket> webSockets;
     private boolean running;
 
     public WebSocketSubscriberProxy(InetSocketAddress webSocketAddress,String zmqAddress, ZContext context) {
         super(webSocketAddress);
         this.context = context;
         connect(zmqAddress);
+        webSockets = new ArrayList<>();
     }
 
     private void connect(String address) {
@@ -30,12 +33,12 @@ public class WebSocketSubscriberProxy extends WebSocketServer {
 
     @Override
     public void onOpen(WebSocket webSocket, ClientHandshake clientHandshake) {
-        this.webSocket = webSocket;
+        webSockets.add(webSocket);
     }
 
     @Override
     public void onClose(WebSocket webSocket, int i, String s, boolean b) {
-        this.webSocket = null;
+        webSockets.remove(webSocket);
     }
 
     @Override
@@ -54,9 +57,11 @@ public class WebSocketSubscriberProxy extends WebSocketServer {
         running = true;
         while (running) {
             String msg = socket.recvStr(ZMQ.NOBLOCK);
-            if (webSocket != null && msg != null) {
-                System.out.println("zmq -> websocket");
-                webSocket.send(msg);
+            if (webSockets.size() > 0 && msg != null) {
+                for (WebSocket webSocket : webSockets) {
+                    System.out.println("zmq -> websocket");
+                    webSocket.send(msg);
+                }
             }
             try {
                 Thread.sleep(1);
