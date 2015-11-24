@@ -21,8 +21,8 @@ import qualified Data.Text.Encoding as TextEnc
 
 import           Monto.Broker (Broker,Response)
 import qualified Monto.Broker as B
-import           Monto.ConfigurationMessage (ConfigurationMessage)
-import qualified Monto.ConfigurationMessage as ConfigMsg
+--import           Monto.ConfigurationMessage (ConfigurationMessage)
+--import qualified Monto.ConfigurationMessage as ConfigMsg
 import qualified Monto.DeregisterService as D
 import           Monto.DiscoverRequest (DiscoverRequest, ServiceDiscover)
 import qualified Monto.DiscoverRequest as DiscoverReq
@@ -35,6 +35,8 @@ import qualified Monto.RegisterServiceResponse as RS
 import           Monto.Types (Port, ServiceID)
 import           Monto.VersionMessage (VersionMessage)
 import qualified Monto.VersionMessage as V
+
+import           Text.Printf
 
 import           Options.Applicative
 
@@ -88,12 +90,12 @@ run opts ctx snk = do
   sourceThread <- runSourceThread opts ctx appstate
   registerThread <- runRegisterThread opts ctx appstate
   discoverThread <- runDiscoverThread opts ctx appstate
-  configThread <- runConfigThread opts ctx appstate
+  --configThread <- runConfigThread opts ctx appstate
   threads <- forM (B.portPool broker) $ runServiceThread opts ctx snk appstate
 
   _ <- readMVar interrupted
   forM_ threads killThread
-  killThread configThread
+  --killThread configThread
   killThread discoverThread
   killThread registerThread
   killThread sourceThread
@@ -124,8 +126,9 @@ runRegisterThread opts ctx appstate = forkIO $
       case (maybeRegister, maybeDeregister) of
         (Just msg, Nothing) -> modifyMVar_ appstate $ onRegisterMessage msg socket
         (Nothing, Just msg) -> modifyMVar_ appstate $ onDeregisterMessage msg socket
-        (Nothing, Nothing) -> putStrLn "message is not a register request nor a deregister message"
-        (_, _) -> putStrLn "couldn't distinguish between register request and deregister message"
+        (_, _) -> do
+          printf "Couldn't parse message: %s\n" $ BS.unpack rawMsg
+          sendRegisterServiceResponse socket "failed: service did not register correctly" Nothing
 
 runDiscoverThread :: Options -> Context -> MVar AppState -> IO ThreadId
 runDiscoverThread opts ctx appstate = forkIO $
@@ -138,24 +141,24 @@ runDiscoverThread opts ctx appstate = forkIO $
         Just msg -> do
           (broker, _) <- readMVar appstate
           Z.send discSocket [] $ convertBslToBs $ A.encode $ findServices (DiscoverReq.discoverServices msg) broker
-        Nothing -> putStrLn "couldn't parse discover request"
+        Nothing -> printf "couldn't parse discover request: %s\n" $ BS.unpack rawMsg
 
-runConfigThread :: Options -> Context -> MVar AppState -> IO ThreadId
-runConfigThread opts ctx appstate = forkIO $
-  Z.withSocket ctx Z.Sub $ \configSocket -> do
-    Z.bind configSocket $ config opts
-    Z.subscribe configSocket ""
-    putStrLn $ unwords ["listen on address", config opts, "for config messages"]
-    forever $ do
-      rawMsg <- Z.receive configSocket
-      case (A.decodeStrict rawMsg :: Maybe ConfigurationMessage) of
-        Just msg -> do
-          (broker, socketPool) <- readMVar appstate
-          let services = M.elems $ B.services broker
-          forM_ (ConfigMsg.configureServices msg) $ \configuration ->
-            let service = head $ filter (\s -> ConfigMsg.serviceID configuration == B.serviceID s) services
-            in Z.send (fromJust $ M.lookup (B.port service) socketPool) [] $ convertBslToBs $ A.encode [configuration]
-        Nothing -> putStrLn "message is not a configuration message"
+-- runConfigThread :: Options -> Context -> MVar AppState -> IO ThreadId
+-- runConfigThread opts ctx appstate = forkIO $
+--  Z.withSocket ctx Z.Sub $ \configSocket -> do
+--    Z.bind configSocket $ config opts
+--    Z.subscribe configSocket ""
+--    putStrLn $ unwords ["listen on address", config opts, "for config messages"]
+--    forever $ do
+--      rawMsg <- Z.receive configSocket
+--      case A.decodeStrict rawMsg of
+--        Just msg -> do
+--          (broker, socketPool) <- readMVar appstate
+--          let services = M.elems $ B.services broker
+--          forM_ (ConfigMsg.configureServices msg) $ \configuration ->
+--            let service = head $ filter (\s -> ConfigMsg.serviceID configuration == B.serviceID s) services
+--            in Z.send (fromJust $ M.lookup (B.port service) socketPool) [] $ convertBslToBs $ A.encode [configuration]
+--        Nothing -> printf "message is not a configuration message: %s\n" (BS.unpack rawMsg)
 
 runServiceThread :: Options -> Context -> Socket Pub -> MVar AppState -> Port -> IO ThreadId
 runServiceThread opts ctx snk appstate port = forkIO $
