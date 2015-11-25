@@ -172,7 +172,9 @@ runServiceThread opts ctx snk appstate port = forkIO $
       let serviceID = getServiceIdByPort port broker'
       let msg = A.decodeStrict rawMsg
       for_ msg $ \msg' -> do
-        Z.send snk [Z.SendMore] (BS.concat [(TextEnc.encodeUtf8 $ P.source msg'), (TextEnc.encodeUtf8 " "), (TextEnc.encodeUtf8 serviceID)])
+        Z.send snk [Z.SendMore] $
+         BS.unwords $ TextEnc.encodeUtf8 <$>
+           [ P.source msg', P.product msg', P.language msg', serviceID ]
         Z.send snk [] rawMsg
         when (debug opts) $ putStrLn $ unwords [T.unpack serviceID, T.unpack (P.source msg'), "->", "broker"]
         modifyMVar_ appstate $ onProductMessage opts msg'
