@@ -94,7 +94,7 @@ removeProductDependency (Version (_,s,_)) resourceMgr = fromMaybe resourceMgr $ 
     { versions     = M.delete s (versions resourceMgr)
     , dependencies = G.delNode node (dependencies resourceMgr)
     }
-removeProductDependency (Product (_,_,s,l,p)) resourceMgr = fromMaybe resourceMgr $ do
+removeProductDependency (Product (_,s,l,p)) resourceMgr = fromMaybe resourceMgr $ do
   node <- lookupProductNode (s,l,p) resourceMgr
   return $ resourceMgr
     { products     = M.delete (s,l,p) (products resourceMgr)
@@ -114,11 +114,10 @@ addProduct productMessage resourceMgr = do
   where
     node   = maxNode resourceMgr
     vid    = P.versionId productMessage
-    pid    = P.productId productMessage
     lang   = P.language  productMessage
     source = P.source    productMessage
     prod   = P.product   productMessage
-    dep    = Product (vid,pid,source,lang,prod)
+    dep    = Product (vid,source,lang,prod)
 
 addProductDependencyEdges :: Foldable f => Node -> f ProductDependency -> ResourceManager -> Maybe ResourceManager
 {-# INLINE addProductDependencyEdges #-}
@@ -128,7 +127,7 @@ addProductDependencyEdges from deps resourceMgr =
     addProductDependencyEdge st (Version (_,s,_)) = do
       to <- lookupVersionNode s resourceMgr
       return $ st { dependencies = G.insEdge (from,to,()) (dependencies st) }
-    addProductDependencyEdge st (Product (_,_,s,l,p)) = do
+    addProductDependencyEdge st (Product (_,s,l,p)) = do
       to <- lookupProductNode (s,l,p) resourceMgr
       return $ st { dependencies = G.insEdge (from,to,()) (dependencies st) }
 
@@ -138,7 +137,7 @@ reverseDependencies (Version (_,s,_)) resourceMgr = fromMaybe [] $ do
   node <- lookupVersionNode s resourceMgr
   let deps = dependencies resourceMgr
   return $ catMaybes $ map (G.lab deps) $ G.rdfs [node] deps
-reverseDependencies (Product (_,_,s,l,p)) resourceMgr = fromMaybe [] $ do
+reverseDependencies (Product (_,s,l,p)) resourceMgr = fromMaybe [] $ do
   node <- lookupProductNode (s,l,p) resourceMgr
   let deps = dependencies resourceMgr
   return $ catMaybes $ map (G.lab deps) $ G.rdfs [node] deps
@@ -169,8 +168,8 @@ versionId :: VersionMessage -> (VersionID,Source,Language)
 versionId version = (V.versionId version,V.source version,V.language version)
 {-# INLINE versionId #-}
 
-productId :: ProductMessage -> (VersionID,ProductID,Source,Product,Language)
-productId prod = (P.productId prod, P.versionId prod, P.source prod,P.product prod, P.language prod)
+productId :: ProductMessage -> (VersionID,Source,Product,Language)
+productId prod = (P.versionId prod, P.source prod,P.product prod, P.language prod)
 {-# INLINE productId #-}
 
 instance Eq ResourceManager where

@@ -7,7 +7,7 @@ import           Monto.Types
 
 data ProductDependency
   = Version (VersionID,Source,Language)
-  | Product (VersionID,ProductID,Source,Language,Product)
+  | Product (VersionID,Source,Language,Product)
   deriving (Eq,Ord,Show)
 
 instance ToJSON ProductDependency where
@@ -17,10 +17,9 @@ instance ToJSON ProductDependency where
     , "source"     .= s
     , "language"   .= l
     ]
-  toJSON (Product (vid,pid,s,l,p)) = object
+  toJSON (Product (vid,s,l,p)) = object
     [ "tag"        .= ("product" :: Text)
     , "version_id" .= vid
-    , "product_id" .= pid
     , "source"     .= s
     , "language"   .= l
     , "product"    .= p
@@ -36,11 +35,9 @@ instance FromJSON ProductDependency where
       "version" -> do
         return $ Version (vid,s,l)
       "product" -> do
-        pid <- obj .: "product_id"
         p   <- obj .: "product"
-        return $ Product (vid,pid,s,l,p)
+        return $ Product (vid,s,l,p)
       _ -> fail "tag has to be version or product"
-    
 
 type Invalid = ProductDependency
 type ReverseProductDependency = ProductDependency

@@ -14,7 +14,6 @@ import           Monto.ProductDependency
 data ProductMessage =
   ProductMessage
     { versionId    :: Int
-    , productId    :: Int
     , source       :: Source
     , serviceId    :: ServiceID
     , product      :: Product
@@ -25,7 +24,6 @@ data ProductMessage =
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
     "versionId" -> "version_id"
-    "productId" -> "product_id"
     "serviceId" -> "service_id"
     label -> label
 }) ''ProductMessage)
@@ -34,9 +32,8 @@ productDependencies :: ProductMessage -> Vector ProductDependency
 productDependencies = fromMaybe V.empty . dependencies
 
 instance Show ProductMessage where
-  show (ProductMessage i j s sid p l _ _) =
+  show (ProductMessage i s sid p l _ _) =
     concat [ "{", show i
-           , ",", show j
            , ",", T.unpack s
            , ",", T.unpack sid
            , ",", T.unpack p
