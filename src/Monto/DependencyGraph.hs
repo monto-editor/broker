@@ -7,67 +7,40 @@ import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
 
-data Dependency dep
-  = Dependency dep
-  | Bottom
-  | Top
-  deriving (Eq,Ord)
-
-instance Show dep => Show (Dependency dep) where
-  show Bottom = "Bot"
-  show Top = "Top"
-  show (Dependency dep) = show dep
-
-instance Read dep => Read (Dependency dep) where
-  readsPrec p r = do
-    (a,r') <- lex r
-    if a == "Source"
-      then return (Bottom,r')
-      else do
-        (dep,r'')<- readsPrec p r
-        return (Dependency dep,r'')
-
 data DependencyGraph dep
   = DependencyGraph
   { maxNode :: Node
-  , nodeMap      :: Map (Dependency dep) Node
-  , dependencies :: Gr (Dependency dep) ()
+  , nodeMap      :: Map dep Node
+  , dependencies :: Gr dep ()
   } deriving (Show,Eq)
 
 empty :: Ord dep => DependencyGraph dep
 empty = DependencyGraph
-  { nodeMap      = M.fromList [(Bottom,0),(Top,1)]
-  , dependencies = G.insNodes [(0,Bottom),(1,Top)] G.empty
+  { nodeMap      = M.empty
+  , dependencies = G.empty
   , maxNode      = 1
   }
 
-register :: Ord dep => dep -> [Dependency dep] -> DependencyGraph dep -> DependencyGraph dep
+register :: Ord dep => dep -> [dep] -> DependencyGraph dep -> DependencyGraph dep
 {-# INLINE register #-}
 register from to gr =
-  let (gr',fromNode) = registerDependency gr (Dependency from)
+  let (gr',fromNode) = registerDependency gr from
       (gr'',toNodes) = mapAccumR registerDependency gr' to
-      dependencies' = G.insNodes [ (1,Top) ]
-                    $ G.insEdges [ (fromNode,toNode,()) | toNode <- toNodes]
-                    $ G.delNode 1
+      dependencies' = G.insEdges [ (fromNode,toNode,()) | toNode <- toNodes]
                     $ G.delEdges [ (fromNode,suc) | suc <- G.suc (dependencies gr'') fromNode ]
                     $ dependencies gr''
-      dependencies'' = G.insEdges [(1,n,()) | n <- G.nodes dependencies'
-                                            , n /= 1
-                                            , n /= 0
-                                            , G.indeg dependencies' n == 0 ]
-                                  dependencies'
   in gr''
-    { dependencies = dependencies''
+    { dependencies = dependencies'
     }
 
 deregister :: Ord dep => dep -> DependencyGraph dep -> DependencyGraph dep
 deregister dep gr = fromMaybe gr $ do
-  node <- M.lookup (Dependency dep) (nodeMap gr)
+  node <- M.lookup dep (nodeMap gr)
   return $ gr { dependencies = G.delNode node (dependencies gr)
-              , nodeMap = M.delete (Dependency dep) (nodeMap gr)
+              , nodeMap = M.delete dep (nodeMap gr)
               }
 
-registerDependency :: Ord dep => DependencyGraph dep -> Dependency dep -> (DependencyGraph dep,Node)
+registerDependency :: Ord dep => DependencyGraph dep -> dep -> (DependencyGraph dep,Node)
 {-# INLINE registerDependency #-}
 registerDependency gr dep =
   case M.lookup dep (nodeMap gr) of

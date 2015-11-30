@@ -49,8 +49,8 @@ isOutdated pr resourceMgr = fromMaybe True $ do
 updateVersion :: VersionMessage -> ResourceManager -> (Vector Invalid,ResourceManager)
 {-# INLINE updateVersion #-}
 updateVersion version resourceMgr =
-  let vdep             = Version $ versionId version
-      (invalid,resourceMgr') = removeOldDependencies vdep resourceMgr
+  let dep = versionDependency version
+      (invalid,resourceMgr') = removeOldDependencies dep resourceMgr
       resourceMgr''          = addVersion version resourceMgr'
   in (invalid,resourceMgr'')
 
@@ -61,23 +61,20 @@ updateProduct' p s = fromMaybe (V.empty,s) $ updateProduct p s
 updateProduct :: ProductMessage -> ResourceManager -> Maybe (Vector Invalid,ResourceManager)
 {-# INLINE updateProduct #-}
 updateProduct prod resourceMgr = do
-  let pid              = productId prod
-  let (invalid,resourceMgr') = removeOldDependencies (Product pid) resourceMgr
+  let dep = productDependency prod
+  let (invalid,resourceMgr') = removeOldDependencies dep resourceMgr
   resourceMgr'' <- addProduct prod resourceMgr'
   return (invalid,resourceMgr'')
 
 addVersion :: VersionMessage -> ResourceManager -> ResourceManager
 {-# INLINE addVersion #-}
 addVersion version resourceMgr = resourceMgr
-  { versions = M.insert source (version,node) (versions resourceMgr)
-  , dependencies = G.insNode (node,Version (vid,source,lang)) (dependencies resourceMgr)
+  { versions = M.insert (V.source version) (version,node) (versions resourceMgr)
+  , dependencies = G.insNode (node,versionDependency version) (dependencies resourceMgr)
   , maxNode = node + 1
   }
   where
-    node   = maxNode resourceMgr
-    vid    = V.versionId version
-    lang   = V.language version
-    source = V.source version
+    node = maxNode resourceMgr
 
 removeOldDependencies :: ProductDependency -> ResourceManager -> (Vector Invalid,ResourceManager)
 {-# INLINE removeOldDependencies #-}
@@ -88,13 +85,13 @@ removeOldDependencies dep resourceMgr = fromMaybe (V.empty,resourceMgr) $ do
 
 removeProductDependency :: ReverseProductDependency -> ResourceManager -> ResourceManager
 {-# INLINE removeProductDependency #-}
-removeProductDependency (Version (_,s,_)) resourceMgr = fromMaybe resourceMgr $ do
+removeProductDependency (VersionDependency _ s _) resourceMgr = fromMaybe resourceMgr $ do
   node <- lookupVersionNode s resourceMgr
   return $ resourceMgr
     { versions     = M.delete s (versions resourceMgr)
     , dependencies = G.delNode node (dependencies resourceMgr)
     }
-removeProductDependency (Product (_,s,l,p)) resourceMgr = fromMaybe resourceMgr $ do
+removeProductDependency (ProductDependency _ s l p) resourceMgr = fromMaybe resourceMgr $ do
   node <- lookupProductNode (s,l,p) resourceMgr
   return $ resourceMgr
     { products     = M.delete (s,l,p) (products resourceMgr)
@@ -106,38 +103,37 @@ addProduct :: ProductMessage -> ResourceManager -> Maybe ResourceManager
 addProduct productMessage resourceMgr = do
   versionNode <- lookupVersionNode source resourceMgr
   version     <- G.lab (dependencies resourceMgr) versionNode
-  addProductDependencyEdges node (V.cons version (P.productDependencies productMessage)) $ resourceMgr
+  addProductDependencyEdges node (V.cons version (P.dependencies productMessage)) $ resourceMgr
     { products     = M.insert (source,lang,prod) (productMessage,node) (products resourceMgr)
     , dependencies = G.insNode (node,dep) (dependencies resourceMgr)
     , maxNode      = node + 1
     }
   where
     node   = maxNode resourceMgr
-    vid    = P.versionId productMessage
     lang   = P.language  productMessage
     source = P.source    productMessage
     prod   = P.product   productMessage
-    dep    = Product (vid,source,lang,prod)
+    dep    = productDependency productMessage
 
 addProductDependencyEdges :: Foldable f => Node -> f ProductDependency -> ResourceManager -> Maybe ResourceManager
 {-# INLINE addProductDependencyEdges #-}
 addProductDependencyEdges from deps resourceMgr =
   F.foldlM addProductDependencyEdge resourceMgr deps
   where
-    addProductDependencyEdge st (Version (_,s,_)) = do
+    addProductDependencyEdge st (VersionDependency _ s _) = do
       to <- lookupVersionNode s resourceMgr
       return $ st { dependencies = G.insEdge (from,to,()) (dependencies st) }
-    addProductDependencyEdge st (Product (_,s,l,p)) = do
+    addProductDependencyEdge st (ProductDependency _ s l p) = do
       to <- lookupProductNode (s,l,p) resourceMgr
       return $ st { dependencies = G.insEdge (from,to,()) (dependencies st) }
 
 reverseDependencies :: ProductDependency -> ResourceManager -> [ReverseProductDependency]
 {-# INLINE reverseDependencies #-}
-reverseDependencies (Version (_,s,_)) resourceMgr = fromMaybe [] $ do
+reverseDependencies (VersionDependency _ s _) resourceMgr = fromMaybe [] $ do
   node <- lookupVersionNode s resourceMgr
   let deps = dependencies resourceMgr
   return $ catMaybes $ map (G.lab deps) $ G.rdfs [node] deps
-reverseDependencies (Product (_,s,l,p)) resourceMgr = fromMaybe [] $ do
+reverseDependencies (ProductDependency _ s l p) resourceMgr = fromMaybe [] $ do
   node <- lookupProductNode (s,l,p) resourceMgr
   let deps = dependencies resourceMgr
   return $ catMaybes $ map (G.lab deps) $ G.rdfs [node] deps
@@ -164,13 +160,13 @@ lookupProductNode k resourceMgr = do
   (_,node) <- M.lookup k (products resourceMgr)
   return node
 
-versionId :: VersionMessage -> (VersionID,Source,Language)
-versionId version = (V.versionId version,V.source version,V.language version)
-{-# INLINE versionId #-}
+versionDependency :: VersionMessage -> ProductDependency
+versionDependency version = VersionDependency (V.versionId version) (V.source version) (V.language version)
+{-# INLINE versionDependency #-}
 
-productId :: ProductMessage -> (VersionID,Source,Product,Language)
-productId prod = (P.versionId prod, P.source prod,P.product prod, P.language prod)
-{-# INLINE productId #-}
+productDependency :: ProductMessage -> ProductDependency
+productDependency prod = ProductDependency (P.versionId prod) (P.source prod) (P.language prod) (P.product prod)
+{-# INLINE productDependency #-}
 
 instance Eq ResourceManager where
   m1 == m2 = versions m1 == versions m2

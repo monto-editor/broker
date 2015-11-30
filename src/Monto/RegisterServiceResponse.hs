@@ -4,11 +4,12 @@ module Monto.RegisterServiceResponse where
 import           Data.Aeson.TH
 import           Data.Text (Text)
 import qualified Data.Text as T
+import           Monto.Types
 
 data RegisterServiceResponse =
   RegisterServiceResponse
     { response    :: Text
-    , bindOnPort  :: Maybe Int
+    , bindOnPort  :: Maybe Port
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of

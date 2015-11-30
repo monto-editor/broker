@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Monto.ProductDependency where
 
 import           Data.Aeson
@@ -6,18 +6,18 @@ import           Data.Text (Text,unpack)
 import           Monto.Types
 
 data ProductDependency
-  = Version (VersionID,Source,Language)
-  | Product (VersionID,Source,Language,Product)
-  deriving (Eq,Ord,Show)
+  = VersionDependency VersionID Source Language
+  | ProductDependency VersionID Source Language Product
+  deriving (Eq,Show)
 
 instance ToJSON ProductDependency where
-  toJSON (Version (vid,s,l)) = object
+  toJSON (VersionDependency vid s l) = object
     [ "tag"        .= ("version" :: Text)
     , "version_id" .= vid
     , "source"     .= s
     , "language"   .= l
     ]
-  toJSON (Product (vid,s,l,p)) = object
+  toJSON (ProductDependency vid s l p) = object
     [ "tag"        .= ("product" :: Text)
     , "version_id" .= vid
     , "source"     .= s
@@ -32,11 +32,11 @@ instance FromJSON ProductDependency where
     s   <- obj .: "source"
     l   <- obj .: "language"
     case unpack tag of
-      "version" -> do
-        return $ Version (vid,s,l)
+      "version" ->
+        return $ VersionDependency vid s l
       "product" -> do
         p   <- obj .: "product"
-        return $ Product (vid,s,l,p)
+        return $ ProductDependency vid s l p
       _ -> fail "tag has to be version or product"
 
 type Invalid = ProductDependency

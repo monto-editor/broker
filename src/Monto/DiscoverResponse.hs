@@ -4,7 +4,6 @@ module Monto.DiscoverResponse where
 import           Data.Aeson.TH
 import           Data.Aeson (Value)
 import           Data.Text (Text)
-import qualified Data.Text as T
 
 import           Monto.Types
 
@@ -16,19 +15,9 @@ data DiscoverResponse =
     , language    :: Language
     , product     :: Product
     , options     :: Maybe Value
-    } deriving (Eq)
+    } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
     "serviceID" -> "service_id"
     label' -> label'
 }) ''DiscoverResponse)
-
-instance Show DiscoverResponse where
-  show (DiscoverResponse s l d lg p _) =
-    concat [ "{", T.unpack s
-           , ",", T.unpack l
-           , ",", T.unpack d
-           , ",", T.unpack lg
-           , ",", T.unpack p
-           , "}"
-           ]

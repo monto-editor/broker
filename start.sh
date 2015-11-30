@@ -11,5 +11,5 @@ $JAVA_HOME/bin/java -jar websockets/dist/broker-websockets.jar \
 	--registration 'tcp://*:5004' \
 	--discovery 'tcp://*:5005' \
 	--config 'tcp://*:5007' \
-	--servicesFrom 5010 \
-	--servicesTo 5025
+	--servicesFrom "Port 5010" \
+	--servicesTo "Port 5025"
