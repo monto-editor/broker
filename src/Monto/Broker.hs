@@ -6,6 +6,7 @@ module Monto.Broker
   , printBroker
   , registerService
   , deregisterService
+  , registerProductDependency
   , Broker(..)
   , newVersion
   , newProduct
@@ -31,6 +32,7 @@ import qualified Data.Vector as Vector
 import           Monto.Types
 import           Monto.VersionMessage (VersionMessage)
 import           Monto.ProductMessage (ProductMessage)
+import           Monto.ProductDependency (ProductDependency)
 import           Monto.ResourceManager (ResourceManager)
 import qualified Monto.ResourceManager as R
 import           Monto.DependencyGraph (DependencyGraph)
@@ -123,3 +125,9 @@ newProduct pr broker
           }
     in error $ "TODO: Lookup service and product dependencies and notify "
             ++ "services that have satifies dependencies"
+
+
+registerProductDependency :: ProductDependency -> [ProductDependency] -> Broker -> ([Source],Broker)
+registerProductDependency product dependsOn broker =
+  error $ "TODO: register a product dependency and return the sources that "
+       ++ "have to be requested from the IDE"
