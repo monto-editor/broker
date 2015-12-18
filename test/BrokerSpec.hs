@@ -2,9 +2,11 @@
 module BrokerSpec(spec) where
 
 import           Control.Monad.State
+import           Control.Arrow
 
 import qualified Data.Vector as V
 import qualified Data.Map as M
+import qualified Data.Set as S
 
 import           Monto.Broker (Response(..))
 import qualified Monto.Broker as B
@@ -21,7 +23,7 @@ import           Test.Hspec
 spec :: Spec
 spec = do
 
-  let register sid lang prod deps = B.registerService (RegisterServiceRequest sid "" "" lang prod Nothing (V.fromList deps))
+  let register sid lang prod deps = B.registerService (RegisterServiceRequest sid "" "" lang (V.singleton prod) Nothing (V.fromList deps))
       java = "java" :: Language
       tokens = "tokens" :: Product
       ast = "ast" :: Product
@@ -39,6 +41,8 @@ spec = do
       comMsg vid src deps = P.ProductMessage vid src javaCodeCompletion completions java "" (V.fromList deps)
       tokMsg vid src deps = P.ProductMessage vid src javaTokenizer tokens java "" (V.fromList deps)
       v1 = VersionID 1
+      newVersion' v b = first S.fromList $ B.newVersion v b
+      newProduct' v b = first S.fromList $ B.newProduct v b
 
   context  "Static Dependencies" $ do
 
@@ -52,35 +56,36 @@ spec = do
         javaCodeCompletionService = B.services broker M.! javaCodeCompletion
         javaTypecheckerService = B.services broker M.! javaTypechecker
 
-    it "can manage static server dependencies" $
+    it "can manage static server dependencies" $ do
       void $ flip execStateT broker $ do
 
-        B.newVersion (s1 v1) `shouldSatisfy'` \responses ->
-              length responses == 2
-           && Response "s1" javaParserService [B.VersionMessage (s1 v1)] `elem` responses
-           && Response "s1" javaTokenizerService [B.VersionMessage (s1 v1)] `elem` responses
+        newVersion' (s1 v1) `shouldBe'` S.fromList
+           [ Response "s1" javaParserService [B.VersionMessage (s1 v1)]
+           , Response "s1" javaTokenizerService [B.VersionMessage (s1 v1)]
+           ]
 
         let ast1 = astMsg v1 "s1" []
-        B.newProduct ast1 `shouldSatisfy'` \responses ->
-              length responses == 2
-           && Response "s1" javaCodeCompletionService [B.ProductMessage ast1] `elem` responses
-           && Response "s1" javaTypecheckerService [B.ProductMessage ast1] `elem` responses
+        newProduct' ast1 `shouldBe'` S.fromList
+           [ Response "s1" javaCodeCompletionService [B.VersionMessage (s1 v1), B.ProductMessage ast1]
+           , Response "s1" javaTypecheckerService [B.VersionMessage (s1 v1), B.ProductMessage ast1]
+           ]
 
-        B.newProduct (tokMsg v1 "s1" []) `shouldBe'` []
-        B.newProduct (comMsg v1 "s1" []) `shouldBe'` []
-        B.newProduct (typMsg v1 "s1" []) `shouldBe'` []
+        newProduct' (tokMsg v1 "s1" []) `shouldBe'` S.fromList []
+        newProduct' (comMsg v1 "s1" []) `shouldBe'` S.fromList []
+        newProduct' (typMsg v1 "s1" []) `shouldBe'` S.fromList []
 
     it "can deal with outdated products" $ do
       _ <- flip execStateT broker $ do
         let currentId = VersionID 42
             outdatedId = VersionID 41
-        B.newVersion (s1 currentId) `shouldSatisfy'` \responses ->
-              length responses == 2
-           && Response "s1" javaParserService [B.VersionMessage (s1 currentId)] `elem` responses
-           && Response "s1" javaTokenizerService [B.VersionMessage (s1 currentId)] `elem` responses
+
+        newVersion' (s1 currentId) `shouldBe'` S.fromList
+           [ Response "s1" javaParserService [B.VersionMessage (s1 currentId)]
+           , Response "s1" javaTokenizerService [B.VersionMessage (s1 currentId)]
+           ]
 
         -- outdated product arrives
-        B.newProduct (astMsg outdatedId "s1" []) `shouldBe'` []
+        newProduct' (astMsg outdatedId "s1" []) `shouldBe'` S.fromList []
 
       return ()
 
@@ -134,8 +139,3 @@ spec = do
     shouldBe' actual expected = do
       act <- state actual
       lift $ act `shouldBe` expected
-
-
-    shouldSatisfy' actual expected = do
-      act <- state actual
-      lift $ act `shouldSatisfy` expected

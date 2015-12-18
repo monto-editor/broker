@@ -25,3 +25,8 @@ $(deriveJSON (defaultOptions {
     "versionId" -> "version_id"
     label -> label
 }) ''VersionMessage)
+
+
+instance Ord VersionMessage where
+  compare v1 v2 = compare (versionId v1, source v1, language v1, contents v1)
+                          (versionId v2, source v2, language v2, contents v2)

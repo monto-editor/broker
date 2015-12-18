@@ -12,7 +12,10 @@ data DependencyGraph dep
   { maxNode :: Node
   , nodeMap      :: Map dep Node
   , dependencies :: Gr dep ()
-  } deriving (Show,Eq)
+  } deriving (Eq)
+
+instance Show dep => Show (DependencyGraph dep) where
+ show gr = G.prettify (dependencies gr)
 
 empty :: Ord dep => DependencyGraph dep
 empty = DependencyGraph
@@ -54,3 +57,15 @@ registerDependency gr dep =
       in (gr',newNode)
   where
     newNode = maxNode gr + 1
+
+lookupReverseDependencies :: Ord dep => dep -> DependencyGraph dep -> [dep]
+lookupReverseDependencies = lookupGraph G.pre
+
+lookupDependencies :: Ord dep => dep -> DependencyGraph dep -> [dep]
+lookupDependencies = lookupGraph G.suc
+
+lookupGraph :: Ord dep => (Gr dep () -> Node -> [Node]) -> dep -> DependencyGraph dep -> [dep]
+lookupGraph direction dep gr = fromMaybe [] $ do
+  depNode <- M.lookup dep (nodeMap gr)
+  let rdeps = direction (dependencies gr) depNode
+  mapM (G.lab (dependencies gr)) rdeps

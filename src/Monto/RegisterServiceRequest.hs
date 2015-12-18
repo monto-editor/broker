@@ -15,7 +15,7 @@ data RegisterServiceRequest =
     , label        :: Text
     , description  :: Text
     , language     :: Language
-    , product      :: Product
+    , products     :: Vector Product
     , options      :: Maybe Value
     , dependencies :: Vector ServiceDependency
     } deriving (Eq,Show)

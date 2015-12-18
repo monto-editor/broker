@@ -19,6 +19,7 @@ mkDerivation {
   testHaskellDepends = [
     base bytestring containers fgl hspec mtl QuickCheck text vector
   ];
+  doCheck = false;
   description = "Haskell Broker for Monto that implements Service Dependencies";
   license = stdenv.lib.licenses.bsd3;
 }

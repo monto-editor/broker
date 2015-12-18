@@ -24,3 +24,8 @@ $(deriveJSON (defaultOptions {
     "serviceId" -> "service_id"
     label -> label
 }) ''ProductMessage)
+
+
+instance Ord ProductMessage where
+  compare p1 p2 = compare (versionId p1, source p1, language p1, serviceId p1)
+                          (versionId p2, source p2, language p2, serviceId p2)

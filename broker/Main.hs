@@ -19,6 +19,7 @@ import           Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TextEnc
+import qualified Data.Vector as V
 
 import           Monto.Broker (Broker,Response)
 import qualified Monto.Broker as B
@@ -120,13 +121,11 @@ runRegisterThread opts ctx appstate = forkIO $
     putStrLn $ unwords ["listen on address", registration opts, "for registrations"]
     forever $ do
       rawMsg <- Z.receive socket
-      let maybeRegister = A.decodeStrict rawMsg :: Maybe RQ.RegisterServiceRequest
-      let maybeDeregister = A.decodeStrict rawMsg :: Maybe D.DeregisterService
-      case (maybeRegister, maybeDeregister) of
-        (Just msg, Nothing) -> modifyMVar_ appstate $ onRegisterMessage msg socket
-        (Nothing, Just msg) -> modifyMVar_ appstate $ onDeregisterMessage msg socket
-        (_, _) -> do
-          printf "Couldn't parse message: %s\n" $ BS.unpack rawMsg
+      case (A.eitherDecodeStrict rawMsg, A.eitherDecodeStrict rawMsg) of
+        (Right msg, _) -> modifyMVar_ appstate $ onRegisterMessage msg socket
+        (_, Right msg) -> modifyMVar_ appstate $ onDeregisterMessage msg socket
+        (Left r, Left d) -> do
+          printf "Couldn't parse message: %s\n%s\n%s\n" (BS.unpack rawMsg) r d
           sendRegisterServiceResponse socket "failed: service did not register correctly" Nothing
 
 runDiscoverThread :: Options -> Context -> MVar AppState -> IO ThreadId
@@ -167,19 +166,18 @@ runServiceThread opts ctx snk appstate port@(Port p) = forkIO $
 
 findServices :: [ServiceDiscover] -> Broker -> [DiscoverResponse]
 findServices discoverList b =
-  map
-    (\(B.Service serviceID' label' description' language' product' _ configuration') ->
-      DiscoverResp.DiscoverResponse serviceID' label' description' language' product' configuration')
-    (filter (\(B.Service serviceID' _ _ language' product' _ _) ->
-      (List.length discoverList == 0) || any (\(DiscoverReq.ServiceDiscover serviceID'' language'' product'') ->
-        case (serviceID'', language'', product'') of
-          (Just id', _, _) -> id' == serviceID'
-          (Nothing, Just lng, Just prod) -> prod == product' && lng == language'
-          (Nothing, Just lng, Nothing) -> lng == language'
-          (Nothing, Nothing, Just prod) -> prod == product'
-          (Nothing, Nothing, Nothing) -> False)
-      discoverList)
-      (M.elems $ B.services b))
+  map serviceToDiscoverResponse $ filterServices $ M.elems $ B.services b
+  where
+    serviceToDiscoverResponse (B.Service serviceID label description language products _ configuration) =
+      DiscoverResp.DiscoverResponse serviceID label description language products configuration
+
+    filterServices =
+      filter $ \(B.Service serviceID' _ _ language' products' _ _) ->
+        flip any discoverList $ \(DiscoverReq.ServiceDiscover serviceID'' language'' product'') ->
+          and [ maybe True (== serviceID') serviceID''
+              , maybe True (== language') language''
+              , maybe True (`V.elem` products') product''
+              ]
 
 getServiceIdByPort :: Port -> Broker -> ServiceID
 getServiceIdByPort port broker =
