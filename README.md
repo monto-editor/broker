@@ -9,13 +9,12 @@ produces ASTs.
 Build Instructions
 ------------------
 
-1. Build Requirements:
-    * [Haskell Platform 2014](https://www.haskell.org/platform).
-      This includes:
-        - GHC 7.8.3
-        - Cabal 1.18
+1. Build Requirements
+    * GHC >= 7.10.2
+    * Cabal >= 1.18
     * ZeroMQ 4
     * pkgconfig
+
 2. Update the local repository of cabal, install the dependencies of the
    project and build the project.
 
@@ -27,4 +26,4 @@ Build Instructions
    $ cabal build
    ```
 
-3. Start the broker with `./start.sh`
+3. Start the broker with `bash start.sh`
