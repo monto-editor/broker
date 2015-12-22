@@ -18,6 +18,7 @@ library
                        Monto.DeregisterService,
                        Monto.DiscoverRequest,
                        Monto.DiscoverResponse,
+                       Monto.Options,
                        Monto.ProductDependency,
                        Monto.ProductMessage,
                        Monto.RegisterServiceRequest,

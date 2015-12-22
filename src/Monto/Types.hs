@@ -29,6 +29,10 @@ newtype ServiceID = ServiceID Text
   deriving (Eq,Ord,Show,IsString)
 $(deriveJSON defaultOptions ''ServiceID)
 
+newtype OptionID = OptionID Text
+  deriving (Eq,Ord,Show,IsString)
+$(deriveJSON defaultOptions ''OptionID)
+
 class IsText a where
   toText   :: a -> Text
   fromText :: Text -> a
