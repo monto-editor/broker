@@ -26,7 +26,7 @@ import qualified Monto.Broker as B
 --import           Monto.ConfigurationMessage (ConfigurationMessage)
 --import qualified Monto.ConfigurationMessage as ConfigMsg
 import qualified Monto.DeregisterService as D
-import           Monto.DiscoverRequest (DiscoverRequest, ServiceDiscover)
+import           Monto.DiscoverRequest (ServiceDiscover)
 import qualified Monto.DiscoverRequest as DiscoverReq
 import           Monto.DiscoverResponse (DiscoverResponse)
 import qualified Monto.DiscoverResponse as DiscoverResp
@@ -135,10 +135,13 @@ runDiscoverThread opts ctx appstate = forkIO $
     putStrLn $ unwords ["listen on address", discovery opts, "for discover requests"]
     forever $ do
       rawMsg <- Z.receive discSocket
-      case (A.decodeStrict rawMsg :: Maybe DiscoverRequest) of
+      case A.decodeStrict rawMsg of
         Just msg -> do
+          printf "discover request: %s\n" (show msg)
           (broker, _) <- readMVar appstate
-          Z.send discSocket [] $ convertBslToBs $ A.encode $ findServices (DiscoverReq.discoverServices msg) broker
+          let services = findServices (DiscoverReq.discoverServices msg) broker
+          printf "discover response: %s\n" (show services)
+          Z.send discSocket [] $ convertBslToBs $ A.encode services
         Nothing -> printf "couldn't parse discover request: %s\n" $ BS.unpack rawMsg
 
 runServiceThread :: Options -> Context -> Socket Pub -> MVar AppState -> Port -> IO ThreadId
@@ -171,13 +174,13 @@ findServices discoverList b =
     serviceToDiscoverResponse (B.Service serviceID label description language products _ configuration) =
       DiscoverResp.DiscoverResponse serviceID label description language products configuration
 
-    filterServices =
-      filter $ \(B.Service serviceID' _ _ language' products' _ _) ->
+    filterServices
+        | null discoverList = id
+        | otherwise         = filter $ \(B.Service serviceID' _ _ language' products' _ _) ->
         flip any discoverList $ \(DiscoverReq.ServiceDiscover serviceID'' language'' product'') ->
-          and [ maybe True (== serviceID') serviceID''
-              , maybe True (== language') language''
-              , maybe True (`V.elem` products') product''
-              ]
+          maybe True (== serviceID') serviceID''
+          && maybe True (== language') language''
+          && maybe True (`V.elem` products') product''
 
 getServiceIdByPort :: Port -> Broker -> ServiceID
 getServiceIdByPort port broker =
@@ -205,7 +208,7 @@ onRegisterMessage register regSocket (broker, socketPool) = do
       T.putStrLn $ T.unwords ["register", toText serviceID, "->", "broker"]
       let broker' = B.registerService register broker
       case M.lookup serviceID (B.services broker') of
-        Just service -> do
+        Just service ->
           sendRegisterServiceResponse regSocket "ok" $ Just $ B.port service
         Nothing -> do
           T.putStrLn $ T.unwords ["register", toText serviceID, "failed: service did not register correctly"]
