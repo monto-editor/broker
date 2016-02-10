@@ -12,6 +12,6 @@ data ProductDescription = ProductDescription
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
-    "serviceID" -> "service_id"
+    "dependsOn" -> "depends-on"
     label' -> label'
 }) ''ProductDescription)
