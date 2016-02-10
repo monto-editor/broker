@@ -32,6 +32,7 @@ import           Monto.DiscoverResponse (DiscoverResponse)
 import qualified Monto.DiscoverResponse as DiscoverResp
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
+import qualified Monto.ProductDescription as PD
 import qualified Monto.RegisterServiceRequest as RQ
 import qualified Monto.RegisterServiceResponse as RS
 import           Monto.Types
@@ -172,7 +173,7 @@ findServices discoverList b =
   map serviceToDiscoverResponse $ filterServices $ M.elems $ B.services b
   where
     serviceToDiscoverResponse (B.Service serviceID label description language products _ configuration) =
-      DiscoverResp.DiscoverResponse serviceID label description language products configuration
+      DiscoverResp.DiscoverResponse serviceID label description language (V.map PD.product products) configuration
 
     filterServices
         | null discoverList = id
@@ -180,7 +181,7 @@ findServices discoverList b =
         flip any discoverList $ \(DiscoverReq.ServiceDiscover serviceID'' language'' product'') ->
           maybe True (== serviceID') serviceID''
           && maybe True (== language') language''
-          && maybe True (`V.elem` products') product''
+          && maybe True (`V.elem` V.map PD.product products') product''
 
 getServiceIdByPort :: Port -> Broker -> ServiceID
 getServiceIdByPort port broker =

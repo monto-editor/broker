@@ -6,13 +6,14 @@ import           Data.Text(Text)
 import           Data.Vector (Vector)
 
 import           Monto.Types
+import           Monto.ProductDescription
 
 data Service = Service
   { serviceID   :: ServiceID
   , label       :: Text
   , description :: Text
   , language    :: Language
-  , products    :: Vector Product
+  , products    :: Vector ProductDescription
   , port        :: Port
   , options     :: Maybe Value
   }

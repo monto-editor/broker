@@ -21,6 +21,7 @@ library
                        Monto.Options,
                        Monto.ProductDependency,
                        Monto.ProductMessage,
+                       Monto.ProductDescription,
                        Monto.RegisterServiceRequest,
                        Monto.RegisterServiceResponse,
                        Monto.ResourceManager,

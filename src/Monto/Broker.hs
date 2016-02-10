@@ -1,3 +1,4 @@
+
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
@@ -40,6 +41,8 @@ import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 import           Monto.ProductDependency (ProductDependency)
 import           Monto.ResourceManager (ResourceManager)
+import           Monto.ProductDescription (ProductDescription)
+import qualified Monto.ProductDescription as PD
 import qualified Monto.ResourceManager as R
 import           Monto.DependencyGraph (DependencyGraph)
 import qualified Monto.DependencyGraph as DG
@@ -82,27 +85,34 @@ printBroker broker = do
   print (services broker)
   print (portPool broker)
 
+registerRequestToService :: Port -> RegisterServiceRequest -> Service
+registerRequestToService port r =
+  Service (RQ.serviceID r) (RQ.label r) (RQ.description r) (RQ.language r) (RQ.products r) port (RQ.options r)
+
+dependencyOfService :: ServiceID -> Language -> ProductDescription -> (ServiceDependency,[ServiceDependency])
+dependencyOfService sid lang desc = (ServiceDependency sid (PD.product desc) lang,PD.dependsOn desc)
+
 registerService :: RegisterServiceRequest -> Broker -> Broker
 {-# INLINE registerService #-}
 registerService register broker =
   case portPool broker of
     (port:restPool) ->
         let serviceID = RQ.serviceID register
-            deps = Vector.toList $ RQ.dependencies register
-            service = Service serviceID
-                        (RQ.label register)
-                        (RQ.description register)
-                        (RQ.language register)
-                        (RQ.products register)
-                        port
-                        (RQ.options register)
+            lang = RQ.language register
+            service = registerRequestToService port register
+            deps = map (dependencyOfService serviceID lang) $ Vector.toList (RQ.products register)
         in broker
-               { serviceDependencies = DG.register (ServiceDependency serviceID) deps (serviceDependencies broker)
+               { serviceDependencies =
+                     foldl (\graph (from,to) -> DG.register from to graph)
+                           (serviceDependencies broker)
+                           deps
                , services = M.insert serviceID service (services broker)
                , portPool = restPool
                , serviceOnPort = M.insert port serviceID (serviceOnPort broker)
                }
     [] -> error "no more ports avaialable"
+
+
 
 deregisterService :: ServiceID -> Broker -> Broker
 {-# INLINE deregisterService #-}
@@ -111,7 +121,7 @@ deregisterService serviceID broker = fromMaybe broker $ do
   return broker
     { services = M.delete serviceID (services broker)
     , portPool = List.insert (S.port service) (portPool broker)
-    , serviceDependencies = DG.deregister (ServiceDependency serviceID) (serviceDependencies broker)
+    , serviceDependencies = DG.filterDeps (\(ServiceDependency sid _ _) -> sid /= serviceID) (serviceDependencies broker)
     , serviceOnPort = M.delete (S.port service) (serviceOnPort broker)
     }
 
@@ -133,7 +143,9 @@ newProduct pr broker
     let broker' = broker
           { resourceMgr = snd $ R.updateProduct' pr $ resourceMgr broker
           }
-    in (servicesWithSatisfiedDependencies (P.source pr) (ServiceDependency (P.serviceId pr)) broker', broker')
+    in (servicesWithSatisfiedDependencies (P.source pr) sdep broker', broker')
+       where
+         sdep = ServiceDependency (P.serviceId pr) (P.product pr) (P.language pr)
 --error $ "TODO: Lookup service and product dependencies and notify "
 --            ++ "services that have satifies dependencies"
 
@@ -143,11 +155,11 @@ servicesWithSatisfiedDependencies src d broker =
   in flip mapMaybe rdeps $ \rdep ->
        case rdep of
          SourceDependency _ -> error "a source cannot depend on something else"
-         ServiceDependency serviceID -> do
+         ServiceDependency serviceID _ _ -> do
            msgs <- forM (DG.lookupDependencies rdep (serviceDependencies broker)) $ \dep ->
                      case dep of
-                       SourceDependency _    -> VersionMessage <$> R.lookupVersionMessage src (resourceMgr broker)
-                       ServiceDependency sid -> ProductMessage <$> R.lookupProductMessage (src,sid) (resourceMgr broker)
+                       SourceDependency _ -> VersionMessage <$> R.lookupVersionMessage src (resourceMgr broker)
+                       ServiceDependency sid prod lang -> ProductMessage <$> R.lookupProductMessage (src,sid,prod,lang) (resourceMgr broker)
            service <- M.lookup serviceID (services broker)
            return $ Response src service msgs
 

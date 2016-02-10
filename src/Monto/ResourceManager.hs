@@ -31,8 +31,8 @@ import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 
 data ResourceManager = ResourceManager
-  { versions     :: Map Source             (VersionMessage,Node)
-  , products     :: Map (Source,ServiceID) (ProductMessage,Node)
+  { versions     :: Map Source (VersionMessage,Node)
+  , products     :: Map (Source,ServiceID,Product,Language) (ProductMessage,Node)
   , dependencies :: Gr ProductDependency ()
   , maxNode      :: Int
   }
@@ -85,16 +85,16 @@ removeOldDependencies dep resourceMgr = fromMaybe (V.empty,resourceMgr) $ do
 
 removeProductDependency :: ReverseProductDependency -> ResourceManager -> ResourceManager
 {-# INLINE removeProductDependency #-}
-removeProductDependency (VersionDependency _ s _) resourceMgr = fromMaybe resourceMgr $ do
+removeProductDependency (VersionDependency s _) resourceMgr = fromMaybe resourceMgr $ do
   node <- lookupVersionNode s resourceMgr
   return $ resourceMgr
     { versions     = M.delete s (versions resourceMgr)
     , dependencies = G.delNode node (dependencies resourceMgr)
     }
-removeProductDependency (ProductDependency _ s sid) resourceMgr = fromMaybe resourceMgr $ do
-  node <- lookupProductNode (s,sid) resourceMgr
+removeProductDependency (ProductDependency s sid prod lang) resourceMgr = fromMaybe resourceMgr $ do
+  node <- lookupProductNode (s,sid,prod,lang) resourceMgr
   return $ resourceMgr
-    { products     = M.delete (s,sid) (products resourceMgr)
+    { products     = M.delete (s,sid,prod,lang) (products resourceMgr)
     , dependencies = G.delNode node (dependencies resourceMgr)
     }
 
@@ -104,7 +104,7 @@ addProduct productMessage resourceMgr = do
   versionNode <- lookupVersionNode source resourceMgr
   version     <- G.lab (dependencies resourceMgr) versionNode
   addProductDependencyEdges node (V.cons version (P.dependencies productMessage)) $ resourceMgr
-    { products     = M.insert (source,sid) (productMessage,node) (products resourceMgr)
+    { products     = M.insert (source,sid,prod,lang) (productMessage,node) (products resourceMgr)
     , dependencies = G.insNode (node,dep) (dependencies resourceMgr)
     , maxNode      = node + 1
     }
@@ -112,6 +112,8 @@ addProduct productMessage resourceMgr = do
     node   = maxNode resourceMgr
     sid    = P.serviceId productMessage
     source = P.source    productMessage
+    prod   = P.product   productMessage
+    lang   = P.language  productMessage
     dep    = productDependency productMessage
 
 addProductDependencyEdges :: Foldable f => Node -> f ProductDependency -> ResourceManager -> Maybe ResourceManager
@@ -119,21 +121,21 @@ addProductDependencyEdges :: Foldable f => Node -> f ProductDependency -> Resour
 addProductDependencyEdges from deps resourceMgr =
   F.foldlM addProductDependencyEdge resourceMgr deps
   where
-    addProductDependencyEdge st (VersionDependency _ s _) = do
+    addProductDependencyEdge st (VersionDependency s _) = do
       to <- lookupVersionNode s resourceMgr
       return $ st { dependencies = G.insEdge (from,to,()) (dependencies st) }
-    addProductDependencyEdge st (ProductDependency _ s sid) = do
-      to <- lookupProductNode (s,sid) resourceMgr
+    addProductDependencyEdge st (ProductDependency s sid prod lang) = do
+      to <- lookupProductNode (s,sid,prod,lang) resourceMgr
       return $ st { dependencies = G.insEdge (from,to,()) (dependencies st) }
 
 reverseDependencies :: ProductDependency -> ResourceManager -> [ReverseProductDependency]
 {-# INLINE reverseDependencies #-}
-reverseDependencies (VersionDependency _ s _) resourceMgr = fromMaybe [] $ do
+reverseDependencies (VersionDependency s _) resourceMgr = fromMaybe [] $ do
   node <- lookupVersionNode s resourceMgr
   let deps = dependencies resourceMgr
   return $ mapMaybe (G.lab deps) $ G.rdfs [node] deps
-reverseDependencies (ProductDependency _ s sid) resourceMgr = fromMaybe [] $ do
-  node <- lookupProductNode (s,sid) resourceMgr
+reverseDependencies (ProductDependency s sid prod lang) resourceMgr = fromMaybe [] $ do
+  node <- lookupProductNode (s,sid,prod,lang) resourceMgr
   let deps = dependencies resourceMgr
   return $ mapMaybe (G.lab deps) $ G.rdfs [node] deps
 
@@ -142,7 +144,7 @@ lookupVersionMessage s resourceMgr = do
   (version,_) <- M.lookup s (versions resourceMgr)
   return version
 
-lookupProductMessage :: (Source,ServiceID) -> ResourceManager -> Maybe ProductMessage
+lookupProductMessage :: (Source,ServiceID,Product,Language) -> ResourceManager -> Maybe ProductMessage
 lookupProductMessage s resourceMgr = do
   (prod,_) <- M.lookup s (products resourceMgr)
   return prod
@@ -154,17 +156,17 @@ lookupVersionNode s resourceMgr = do
   (_,node) <- M.lookup s (versions resourceMgr)
   return node
 
-lookupProductNode :: (Source,ServiceID) -> ResourceManager -> Maybe Node
+lookupProductNode :: (Source,ServiceID,Product,Language) -> ResourceManager -> Maybe Node
 lookupProductNode k resourceMgr = do
   (_,node) <- M.lookup k (products resourceMgr)
   return node
 
 versionDependency :: VersionMessage -> ProductDependency
-versionDependency version = VersionDependency (V.versionId version) (V.source version) (V.language version)
+versionDependency version = VersionDependency (V.source version) (V.language version)
 {-# INLINE versionDependency #-}
 
 productDependency :: ProductMessage -> ProductDependency
-productDependency prod = ProductDependency (P.versionId prod) (P.source prod) (P.serviceId prod)
+productDependency prod = ProductDependency (P.source prod) (P.serviceId prod) (P.product prod) (P.language prod)
 {-# INLINE productDependency #-}
 
 instance Eq ResourceManager where

@@ -7,7 +7,7 @@ import           Data.Vector (Vector)
 import           Data.Text (Text)
 
 import           Monto.Types
-import           Monto.ServiceDependency
+import           Monto.ProductDescription
 
 data RegisterServiceRequest =
   RegisterServiceRequest
@@ -15,9 +15,8 @@ data RegisterServiceRequest =
     , label        :: Text
     , description  :: Text
     , language     :: Language
-    , products     :: Vector Product
     , options      :: Maybe Value
-    , dependencies :: Vector ServiceDependency
+    , products     :: Vector ProductDescription
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of

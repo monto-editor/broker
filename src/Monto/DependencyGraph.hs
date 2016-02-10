@@ -36,6 +36,13 @@ register from to gr =
     { dependencies = dependencies'
     }
 
+filterDeps :: Ord dep => (dep -> Bool) -> DependencyGraph dep -> DependencyGraph dep
+filterDeps predicate gr =
+  let (delete,keep) = M.partitionWithKey (\k _ -> predicate k) (nodeMap gr)
+  in gr { dependencies = G.delNodes (M.elems delete) (dependencies gr)
+        , nodeMap = keep
+        }
+
 deregister :: Ord dep => dep -> DependencyGraph dep -> DependencyGraph dep
 deregister dep gr = fromMaybe gr $ do
   node <- M.lookup dep (nodeMap gr)

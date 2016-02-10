@@ -12,6 +12,7 @@ import           Monto.Broker (Response(..))
 import qualified Monto.Broker as B
 import qualified Monto.VersionMessage as V
 import qualified Monto.ProductMessage as P
+import qualified Monto.ProductDescription as PD
 import           Monto.ProductDependency
 import           Monto.Types
 import           Monto.RegisterServiceRequest
@@ -23,7 +24,7 @@ import           Test.Hspec
 spec :: Spec
 spec = do
 
-  let register sid lang prod deps = B.registerService (RegisterServiceRequest sid "" "" lang (V.singleton prod) Nothing (V.fromList deps))
+  let register sid lang deps = B.registerService (RegisterServiceRequest sid "" "" lang Nothing (V.fromList deps))
       java = "java" :: Language
       tokens = "tokens" :: Product
       ast = "ast" :: Product
@@ -46,17 +47,17 @@ spec = do
 
   context  "Static Dependencies" $ do
 
-    let broker = register javaCodeCompletion java completions [javaSource, ServiceDependency javaParser]
-               $ register javaTypechecker java errors [javaSource, ServiceDependency javaParser]
-               $ register javaParser java ast [javaSource]
-               $ register javaTokenizer java tokens [javaSource]
+    let broker = register javaCodeCompletion java [PD.ProductDescription completions [javaSource, ServiceDependency javaParser ast java]]
+               $ register javaTypechecker java [PD.ProductDescription errors [javaSource, ServiceDependency javaParser ast java]]
+               $ register javaParser java [PD.ProductDescription ast [javaSource]]
+               $ register javaTokenizer java [PD.ProductDescription tokens [javaSource]]
                $ B.empty (Port 5010) (Port 5020)
         javaTokenizerService = B.services broker M.! javaTokenizer
         javaParserService = B.services broker M.! javaParser
         javaCodeCompletionService = B.services broker M.! javaCodeCompletion
         javaTypecheckerService = B.services broker M.! javaTypechecker
 
-    it "can manage static server dependencies" $ do
+    it "can manage static server dependencies" $
       void $ flip execStateT broker $ do
 
         newVersion' (s1 v1) `shouldBe'` S.fromList
@@ -92,8 +93,8 @@ spec = do
 
   context "Product Dependencies" $ do
 
-    let broker = register javaTypechecker java errors [javaSource,ServiceDependency javaParser]
-               $ register javaParser java ast [javaSource]
+    let broker = register javaTypechecker java [PD.ProductDescription errors [javaSource,ServiceDependency javaParser ast java]]
+               $ register javaParser java [PD.ProductDescription ast [javaSource]]
                $ B.empty (Port 5010) (Port 5020)
         javaParserService = B.services broker M.! javaParser
         javaTypecheckerService = B.services broker M.! javaTypechecker
@@ -108,13 +109,13 @@ spec = do
       --
       void $ flip execStateT broker $ do
         B.registerProductDependency
-             (ProductDependency v1 "s2" javaTypechecker)
-             [ProductDependency v1 "s1" javaTypechecker] `shouldBe'`
+             (ProductDependency "s2" javaTypechecker errors java)
+             [ProductDependency "s1" javaTypechecker errors java] `shouldBe'`
           ["s1"]
 
         B.registerProductDependency
-             (ProductDependency v1 "s3" javaTypechecker)
-             [ProductDependency v1 "s2" javaTypechecker] `shouldBe'`
+             (ProductDependency "s3" javaTypechecker errors java)
+             [ProductDependency "s2" javaTypechecker errors java] `shouldBe'`
           ["s2"]
 
         B.newVersion (s1 v1) `shouldBe'`

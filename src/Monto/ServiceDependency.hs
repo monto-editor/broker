@@ -5,7 +5,7 @@ import Data.Aeson
 import Monto.Types
 import qualified Data.HashMap.Strict as M
 
-data ServiceDependency = ServiceDependency ServiceID | SourceDependency Language
+data ServiceDependency = ServiceDependency ServiceID Product Language | SourceDependency Language
   deriving (Eq,Ord,Show)
 
 instance FromJSON ServiceDependency where
@@ -13,10 +13,15 @@ instance FromJSON ServiceDependency where
     if M.member "service_id" obj
     then
       ServiceDependency <$> obj .: "service_id"
+                        <*> obj .: "product"
+                        <*> obj .: "language"
     else
       SourceDependency <$> obj .: "source_language"
 
 instance ToJSON ServiceDependency where
-  toJSON (ServiceDependency serviceID) = object [ "service_id" .= serviceID ]
+  toJSON (ServiceDependency serviceID lang prod) = object [ "service_id" .= serviceID
+                                                          , "product" .= prod
+                                                          , "language" .= lang
+                                                          ]
   toJSON (SourceDependency lang) = object [ "source_language" .= lang ]
     
