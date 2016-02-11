@@ -46,10 +46,10 @@ spec = do
 
   context  "Static Dependencies" $ do
 
-    let broker = register javaCodeCompletion java [PD.ProductDescription completions [javaSource, ServiceDependency javaParser ast java]]
-               $ register javaTypechecker java [PD.ProductDescription errors [javaSource, ServiceDependency javaParser ast java]]
-               $ register javaParser java [PD.ProductDescription ast [javaSource]]
-               $ register javaTokenizer java [PD.ProductDescription tokens [javaSource]]
+    let broker = register javaCodeCompletion java [PD.ProductDescription completions java [javaSource, ServiceDependency javaParser ast java]]
+               $ register javaTypechecker java [PD.ProductDescription errors java [javaSource, ServiceDependency javaParser ast java]]
+               $ register javaParser java [PD.ProductDescription ast java [javaSource]]
+               $ register javaTokenizer java [PD.ProductDescription tokens java [javaSource]]
                $ B.empty (Port 5010) (Port 5020)
 
     it "can manage static server dependencies" $
@@ -88,8 +88,8 @@ spec = do
 
   context "Product Dependencies" $ do
 
-    let broker = register javaTypechecker java [PD.ProductDescription errors [javaSource,ServiceDependency javaParser ast java]]
-               $ register javaParser java [PD.ProductDescription ast [javaSource]]
+    let broker = register javaTypechecker java [PD.ProductDescription errors java [javaSource,ServiceDependency javaParser ast java]]
+               $ register javaParser java [PD.ProductDescription ast java [javaSource]]
                $ B.empty (Port 5010) (Port 5020)
 
     it "can track dynamic product dependencies" $

@@ -8,6 +8,7 @@ import           Monto.ServiceDependency
 
 data ProductDescription = ProductDescription
     { product :: Product
+    , language :: Language
     , dependsOn :: [ServiceDependency]
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
