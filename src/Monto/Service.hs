@@ -11,7 +11,6 @@ data Service = Service
   { serviceID   :: ServiceID
   , label       :: Text
   , description :: Text
-  , language    :: Language
   , products    :: [ProductDescription]
   , port        :: Port
   , options     :: Maybe Value

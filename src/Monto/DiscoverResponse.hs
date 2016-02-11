@@ -6,14 +6,14 @@ import           Data.Aeson (Value)
 import           Data.Text (Text)
 
 import           Monto.Types
+import           Monto.ProductDescription
 
 data DiscoverResponse =
   DiscoverResponse
     { serviceID   :: ServiceID
     , label       :: Text
     , description :: Text
-    , language    :: Language
-    , products    :: [Product]
+    , products    :: [ProductDescription]
     , options     :: Maybe Value
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {

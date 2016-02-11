@@ -22,16 +22,11 @@ import qualified Data.Text.Encoding as TextEnc
 
 import           Monto.Broker (Broker)
 import qualified Monto.Broker as B
---import           Monto.ConfigurationMessage (ConfigurationMessage)
---import qualified Monto.ConfigurationMessage as ConfigMsg
 import qualified Monto.DeregisterService as D
-import           Monto.DiscoverRequest (ServiceDiscover)
-import qualified Monto.DiscoverRequest as DiscoverReq
 import           Monto.DiscoverResponse (DiscoverResponse)
 import qualified Monto.DiscoverResponse as DiscoverResp
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
-import qualified Monto.ProductDescription as PD
 import qualified Monto.Request as Req
 import           Monto.Request (Request)
 import qualified Monto.RegisterServiceRequest as RQ
@@ -136,15 +131,12 @@ runDiscoverThread opts ctx appstate = forkIO $
     Z.bind discSocket (discovery opts)
     putStrLn $ unwords ["listen on address", discovery opts, "for discover requests"]
     forever $ do
-      rawMsg <- Z.receive discSocket
-      case A.decodeStrict rawMsg of
-        Just msg -> do
-          printf "discover request: %s\n" (show msg)
-          (broker, _) <- readMVar appstate
-          let services = findServices (DiscoverReq.discoverServices msg) broker
-          printf "discover response: %s\n" (show services)
-          Z.send discSocket [] $ convertBslToBs $ A.encode services
-        Nothing -> printf "couldn't parse discover request: %s\n" $ BS.unpack rawMsg
+      _ <- Z.receive discSocket
+      printf "discover request\n"
+      (broker, _) <- readMVar appstate
+      let services = findServices broker
+      printf "discover response: %s\n" (show services)
+      Z.send discSocket [] $ convertBslToBs $ A.encode services
 
 runServiceThread :: Options -> Context -> Socket Pub -> MVar AppState -> Port -> IO ThreadId
 runServiceThread opts ctx snk appstate port@(Port p) = forkIO $
@@ -169,20 +161,10 @@ runServiceThread opts ctx snk appstate port@(Port p) = forkIO $
         when (debug opts) $ T.putStrLn $ T.unwords [toText serviceID, toText $ P.source msg', "->", "broker"]
         modifyMVar_ appstate $ onProductMessage opts msg'
 
-findServices :: [ServiceDiscover] -> Broker -> [DiscoverResponse]
-findServices discoverList b =
-  map serviceToDiscoverResponse $ filterServices $ M.elems $ B.services b
-  where
-    serviceToDiscoverResponse (B.Service serviceID label description language products _ configuration) =
-      DiscoverResp.DiscoverResponse serviceID label description language (map PD.product products) configuration
-
-    filterServices
-        | null discoverList = id
-        | otherwise         = filter $ \(B.Service serviceID' _ _ language' products' _ _) ->
-        flip any discoverList $ \(DiscoverReq.ServiceDiscover serviceID'' language'' product'') ->
-          maybe True (== serviceID') serviceID''
-          && maybe True (== language') language''
-          && maybe True (`elem` map PD.product products') product''
+findServices :: Broker -> [DiscoverResponse]
+findServices b = do
+  (B.Service serviceID label description products _ configuration) <- M.elems $ B.services b
+  return $ DiscoverResp.DiscoverResponse serviceID label description products configuration
 
 getServiceIdByPort :: Port -> Broker -> ServiceID
 getServiceIdByPort port broker =

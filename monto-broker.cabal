@@ -18,6 +18,7 @@ library
                        Monto.DeregisterService,
                        Monto.DiscoverRequest,
                        Monto.DiscoverResponse,
+                       Monto.DynamicDependency,
                        Monto.Options,
                        Monto.ProductDependency,
                        Monto.ProductMessage,
@@ -27,7 +28,6 @@ library
                        Monto.Request,
                        Monto.ResourceManager,
                        Monto.Service,
-                       Monto.ServiceDependency,
                        Monto.Types,
                        Monto.VersionMessage
   build-depends:       base,

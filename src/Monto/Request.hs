@@ -16,16 +16,12 @@ $(deriveJSON defaultOptions ''Message)
 data Request = Request
     { source :: Source
     , serviceID :: ServiceID
-    , product :: Product
-    , language :: Language
     , requirements :: [Message]}
   deriving (Ord,Show)
 
 instance Eq Request where
-  Request src1 service1 prod1 lang1 msgs1 == Request src2 service2 prod2 lang2 msgs2
+  Request src1 service1 msgs1 == Request src2 service2 msgs2
       = src1 == src2
-     && prod1 == prod2
-     && lang1 == lang2
      && service1 == service2
      && S.fromList msgs1 == S.fromList msgs2
 
