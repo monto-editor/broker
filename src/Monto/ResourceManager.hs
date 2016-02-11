@@ -32,19 +32,22 @@ empty = ResourceManager M.empty M.empty
 isOutdated :: ProductMessage -> ResourceManager -> Bool
 isOutdated pr resourceMgr = fromMaybe True $ do
   v <- M.lookup (P.source pr) (versions resourceMgr)
-  return $ P.versionId pr < V.versionId v
+  return $ P.versionID pr < V.versionId v
 
 updateVersion :: VersionMessage -> ResourceManager -> ResourceManager
 {-# INLINE updateVersion #-}
-updateVersion version resourceMgr@ResourceManager {versions = vs} =
-  resourceMgr { versions = M.insert (V.source version) version vs }
+updateVersion version resourceMgr@ResourceManager {versions = vs, products = ps} =
+  resourceMgr { versions = M.insert src version vs
+              , products = M.filterWithKey (\(s,_,_,_) _ -> s /= src) ps
+              }
+  where src = V.source version
 
 updateProduct :: ProductMessage -> ResourceManager -> ResourceManager
 {-# INLINE updateProduct #-}
 updateProduct prod resourceMgr@ResourceManager {products = ps} =
   resourceMgr { products = M.insert k prod ps }
   where
-    k = (P.source prod,P.serviceId prod,P.product prod,P.language prod)
+    k = (P.source prod,P.serviceID prod,P.product prod,P.language prod)
 
 lookupVersionMessage :: Source -> ResourceManager -> Maybe VersionMessage
 lookupVersionMessage src resourceMgr = M.lookup src (versions resourceMgr)

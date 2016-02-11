@@ -124,7 +124,7 @@ newProduct pr broker
     let broker' = broker
           { resourceMgr = R.updateProduct pr $ resourceMgr broker
           }
-    in (servicesWithSatisfiedDependencies (P.source pr) (P.serviceId pr) (P.product pr) (P.language pr) broker', broker')
+    in (servicesWithSatisfiedDependencies (P.source pr) (P.serviceID pr) (P.product pr) (P.language pr) broker', broker')
 --error $ "TODO: Lookup service and product dependencies and notify "
 --            ++ "services that have satifies dependencies"
 

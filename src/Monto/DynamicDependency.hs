@@ -13,6 +13,6 @@ data DynamicDependency = DynamicDependency
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
-    "serviceId" -> "service_id"
+    "serviceID" -> "service_id"
     label -> label
 }) ''DynamicDependency)
