@@ -3,7 +3,6 @@ module Monto.Service where
 import           Data.Aeson (Value)
 import           Data.Ord
 import           Data.Text(Text)
-import           Data.Vector (Vector)
 
 import           Monto.Types
 import           Monto.ProductDescription
@@ -13,7 +12,7 @@ data Service = Service
   , label       :: Text
   , description :: Text
   , language    :: Language
-  , products    :: Vector ProductDescription
+  , products    :: [ProductDescription]
   , port        :: Port
   , options     :: Maybe Value
   }

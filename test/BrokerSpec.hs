@@ -5,10 +5,8 @@ import           Control.Monad.State
 import           Control.Arrow
 
 import qualified Data.Vector as V
-import qualified Data.Map as M
 import qualified Data.Set as S
 
-import           Monto.Broker (Response(..))
 import qualified Monto.Broker as B
 import qualified Monto.VersionMessage as V
 import qualified Monto.ProductMessage as P
@@ -17,6 +15,7 @@ import           Monto.ProductDependency
 import           Monto.Types
 import           Monto.RegisterServiceRequest
 import           Monto.ServiceDependency
+import           Monto.Request
 
 import           Test.Hspec
 
@@ -24,7 +23,7 @@ import           Test.Hspec
 spec :: Spec
 spec = do
 
-  let register sid lang deps = B.registerService (RegisterServiceRequest sid "" "" lang Nothing (V.fromList deps))
+  let register sid lang deps = B.registerService (RegisterServiceRequest sid "" "" lang Nothing deps)
       java = "java" :: Language
       tokens = "tokens" :: Product
       ast = "ast" :: Product
@@ -52,23 +51,19 @@ spec = do
                $ register javaParser java [PD.ProductDescription ast [javaSource]]
                $ register javaTokenizer java [PD.ProductDescription tokens [javaSource]]
                $ B.empty (Port 5010) (Port 5020)
-        javaTokenizerService = B.services broker M.! javaTokenizer
-        javaParserService = B.services broker M.! javaParser
-        javaCodeCompletionService = B.services broker M.! javaCodeCompletion
-        javaTypecheckerService = B.services broker M.! javaTypechecker
 
     it "can manage static server dependencies" $
       void $ flip execStateT broker $ do
 
         newVersion' (s1 v1) `shouldBe'` S.fromList
-           [ Response "s1" javaParserService [B.VersionMessage (s1 v1)]
-           , Response "s1" javaTokenizerService [B.VersionMessage (s1 v1)]
+           [ Request "s1" javaParser ast java [VersionMessage (s1 v1)]
+           , Request "s1" javaTokenizer tokens java [VersionMessage (s1 v1)]
            ]
 
         let ast1 = astMsg v1 "s1" []
         newProduct' ast1 `shouldBe'` S.fromList
-           [ Response "s1" javaCodeCompletionService [B.VersionMessage (s1 v1), B.ProductMessage ast1]
-           , Response "s1" javaTypecheckerService [B.VersionMessage (s1 v1), B.ProductMessage ast1]
+           [ Request "s1" javaCodeCompletion completions java [VersionMessage (s1 v1), ProductMessage ast1]
+           , Request "s1" javaTypechecker errors java [VersionMessage (s1 v1), ProductMessage ast1]
            ]
 
         newProduct' (tokMsg v1 "s1" []) `shouldBe'` S.fromList []
@@ -81,8 +76,8 @@ spec = do
             outdatedId = VersionID 41
 
         newVersion' (s1 currentId) `shouldBe'` S.fromList
-           [ Response "s1" javaParserService [B.VersionMessage (s1 currentId)]
-           , Response "s1" javaTokenizerService [B.VersionMessage (s1 currentId)]
+           [ Request "s1" javaParser ast java [VersionMessage (s1 currentId)]
+           , Request "s1" javaTokenizer tokens java [VersionMessage (s1 currentId)]
            ]
 
         -- outdated product arrives
@@ -96,8 +91,6 @@ spec = do
     let broker = register javaTypechecker java [PD.ProductDescription errors [javaSource,ServiceDependency javaParser ast java]]
                $ register javaParser java [PD.ProductDescription ast [javaSource]]
                $ B.empty (Port 5010) (Port 5020)
-        javaParserService = B.services broker M.! javaParser
-        javaTypecheckerService = B.services broker M.! javaTypechecker
 
     it "can track dynamic product dependencies" $
       --
@@ -119,22 +112,22 @@ spec = do
           ["s2"]
 
         B.newVersion (s1 v1) `shouldBe'`
-          [Response "s1" javaParserService [B.VersionMessage (s1 v1)]]
+          [Request "s1" javaParser ast java [VersionMessage (s1 v1)]]
 
         let ast1s1 = astMsg v1 "s1" []
             ast1s2 = astMsg v1 "s2" []
             typ1s1 = typMsg v1 "s1" []
 
         B.newProduct ast1s1 `shouldBe'`
-          [Response "s1" javaTypecheckerService [B.ProductMessage ast1s1]]
+          [Request "s1" javaTypechecker errors java [ProductMessage ast1s1]]
 
         B.newVersion (s2 v1) `shouldBe'`
-          [Response "s2" javaParserService [B.VersionMessage (s2 v1)]]
+          [Request "s2" javaParser ast java [VersionMessage (s2 v1)]]
 
         B.newProduct ast1s2 `shouldBe'` []
 
         B.newProduct typ1s1 `shouldBe'`
-          [Response "s2" javaTypecheckerService [B.ProductMessage ast1s2,B.ProductMessage typ1s1]]
+          [Request "s2" javaTypechecker errors java [ProductMessage ast1s2,ProductMessage typ1s1]]
 
   where
     shouldBe' actual expected = do

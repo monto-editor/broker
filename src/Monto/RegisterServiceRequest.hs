@@ -3,7 +3,6 @@ module Monto.RegisterServiceRequest where
 
 import           Data.Aeson.TH
 import           Data.Aeson (Value)
-import           Data.Vector (Vector)
 import           Data.Text (Text)
 
 import           Monto.Types
@@ -16,7 +15,7 @@ data RegisterServiceRequest =
     , description  :: Text
     , language     :: Language
     , options      :: Maybe Value
-    , products     :: Vector ProductDescription
+    , products     :: [ProductDescription]
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of

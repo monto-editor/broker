@@ -4,7 +4,6 @@ module Monto.DiscoverResponse where
 import           Data.Aeson.TH
 import           Data.Aeson (Value)
 import           Data.Text (Text)
-import           Data.Vector (Vector)
 
 import           Monto.Types
 
@@ -14,7 +13,7 @@ data DiscoverResponse =
     , label       :: Text
     , description :: Text
     , language    :: Language
-    , products    :: Vector Product
+    , products    :: [Product]
     , options     :: Maybe Value
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {

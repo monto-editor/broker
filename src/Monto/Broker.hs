@@ -12,8 +12,6 @@ module Monto.Broker
   , Broker(..)
   , newVersion
   , newProduct
-  , Response (..)
-  , Message (..)
   , Service(..)
   , ServiceDependency(..)
   )
@@ -31,8 +29,6 @@ import           Data.Maybe
 import qualified Data.List as List
 import           Data.Map (Map)
 import qualified Data.Map as M
-import qualified Data.Vector as Vector
-import qualified Data.Set as S
 
 import           Monto.Types
 import           Monto.VersionMessage (VersionMessage)
@@ -51,16 +47,8 @@ import qualified Monto.RegisterServiceRequest as RQ
 import           Monto.Service(Service(Service))
 import qualified Monto.Service as S
 import           Monto.ServiceDependency
-
-data Message = VersionMessage VersionMessage | ProductMessage ProductMessage
-  deriving (Eq,Ord,Show)
-
-data Response = Response Source Service [Message]
-  deriving (Ord,Show)
-
-instance Eq Response where
-  Response src1 service1 msgs1 == Response src2 service2 msgs2 =
-    src1 == src2 && service1 == service2 && S.fromList msgs1 == S.fromList msgs2
+import           Monto.Request (Request)
+import qualified Monto.Request as Req
 
 data Broker = Broker
   { resourceMgr         :: ResourceManager
@@ -100,7 +88,7 @@ registerService register broker =
         let serviceID = RQ.serviceID register
             lang = RQ.language register
             service = registerRequestToService port register
-            deps = map (dependencyOfService serviceID lang) $ Vector.toList (RQ.products register)
+            deps = map (dependencyOfService serviceID lang) $ RQ.products register
         in broker
                { serviceDependencies =
                      foldl (\graph (from,to) -> DG.register from to graph)
@@ -111,8 +99,6 @@ registerService register broker =
                , serviceOnPort = M.insert port serviceID (serviceOnPort broker)
                }
     [] -> error "no more ports avaialable"
-
-
 
 deregisterService :: ServiceID -> Broker -> Broker
 {-# INLINE deregisterService #-}
@@ -125,7 +111,7 @@ deregisterService serviceID broker = fromMaybe broker $ do
     , serviceOnPort = M.delete (S.port service) (serviceOnPort broker)
     }
 
-newVersion :: VersionMessage -> Broker -> ([Response],Broker)
+newVersion :: VersionMessage -> Broker -> ([Request],Broker)
 {-# INLINE newVersion #-}
 newVersion version broker =
   let broker' = broker
@@ -135,7 +121,7 @@ newVersion version broker =
 --error $ "TODO: Lookup service and product dependencies and notify "
 --          ++ "services that have satifies dependencies"
 
-newProduct :: ProductMessage -> Broker -> ([Response],Broker)
+newProduct :: ProductMessage -> Broker -> ([Request],Broker)
 {-# INLINE newProduct #-}
 newProduct pr broker
   | R.isOutdated pr (resourceMgr broker) = ([],broker)
@@ -149,25 +135,23 @@ newProduct pr broker
 --error $ "TODO: Lookup service and product dependencies and notify "
 --            ++ "services that have satifies dependencies"
 
-servicesWithSatisfiedDependencies :: Source -> ServiceDependency -> Broker -> [Response]
+servicesWithSatisfiedDependencies :: Source -> ServiceDependency -> Broker -> [Request]
 servicesWithSatisfiedDependencies src d broker =
   let rdeps = DG.lookupReverseDependencies d (serviceDependencies broker)
   in flip mapMaybe rdeps $ \rdep ->
        case rdep of
          SourceDependency _ -> error "a source cannot depend on something else"
-         ServiceDependency serviceID _ _ -> do
+         ServiceDependency serviceID prod lang -> do
            msgs <- forM (DG.lookupDependencies rdep (serviceDependencies broker)) $ \dep ->
                      case dep of
-                       SourceDependency _ -> VersionMessage <$> R.lookupVersionMessage src (resourceMgr broker)
-                       ServiceDependency sid prod lang -> ProductMessage <$> R.lookupProductMessage (src,sid,prod,lang) (resourceMgr broker)
-           service <- M.lookup serviceID (services broker)
-           return $ Response src service msgs
+                       SourceDependency _ -> Req.VersionMessage <$> R.lookupVersionMessage src (resourceMgr broker)
+                       ServiceDependency sid prod' lang' -> Req.ProductMessage <$> R.lookupProductMessage (src,sid,prod',lang') (resourceMgr broker)
+           return $ Req.Request src serviceID prod lang msgs
 
 registerProductDependency :: ProductDependency -> [ProductDependency] -> Broker -> ([Source],Broker)
 registerProductDependency product dependsOn broker =
   error $ "TODO: register a product dependency and return the sources that "
        ++ "have to be requested from the IDE"
-
 
 printDependencyGraph :: Broker -> IO ()
 printDependencyGraph broker =

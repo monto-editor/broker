@@ -19,9 +19,8 @@ import           Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TextEnc
-import qualified Data.Vector as V
 
-import           Monto.Broker (Broker,Response)
+import           Monto.Broker (Broker)
 import qualified Monto.Broker as B
 --import           Monto.ConfigurationMessage (ConfigurationMessage)
 --import qualified Monto.ConfigurationMessage as ConfigMsg
@@ -33,6 +32,8 @@ import qualified Monto.DiscoverResponse as DiscoverResp
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 import qualified Monto.ProductDescription as PD
+import qualified Monto.Request as Req
+import           Monto.Request (Request)
 import qualified Monto.RegisterServiceRequest as RQ
 import qualified Monto.RegisterServiceResponse as RS
 import           Monto.Types
@@ -173,7 +174,7 @@ findServices discoverList b =
   map serviceToDiscoverResponse $ filterServices $ M.elems $ B.services b
   where
     serviceToDiscoverResponse (B.Service serviceID label description language products _ configuration) =
-      DiscoverResp.DiscoverResponse serviceID label description language (V.map PD.product products) configuration
+      DiscoverResp.DiscoverResponse serviceID label description language (map PD.product products) configuration
 
     filterServices
         | null discoverList = id
@@ -181,7 +182,7 @@ findServices discoverList b =
         flip any discoverList $ \(DiscoverReq.ServiceDiscover serviceID'' language'' product'') ->
           maybe True (== serviceID') serviceID''
           && maybe True (== language') language''
-          && maybe True (`V.elem` V.map PD.product products') product''
+          && maybe True (`elem` map PD.product products') product''
 
 getServiceIdByPort :: Port -> Broker -> ServiceID
 getServiceIdByPort port broker =
@@ -234,32 +235,29 @@ onProductMessage :: Options -> ProductMessage -> AppState -> IO AppState
 {-# INLINE onProductMessage #-}
 onProductMessage = onMessage B.newProduct
 
-onMessage :: (message -> Broker -> ([Response],Broker)) -> Options -> message -> AppState -> IO AppState
+onMessage :: (message -> Broker -> ([Request],Broker)) -> Options -> message -> AppState -> IO AppState
 {-# INLINE onMessage #-}
 onMessage handler opts msg (broker, socketpool) = do
   let (responses,broker') = handler msg broker
-  sendResponses opts (broker, socketpool) responses
+  sendRequests opts (broker, socketpool) responses
   return (broker', socketpool)
 
-sendResponses :: Options -> AppState -> [Response] -> IO ()
-{-# INLINE sendResponses #-}
-sendResponses opts appstate = mapM_ (sendResponse opts appstate)
+sendRequests :: Options -> AppState -> [Request] -> IO ()
+{-# INLINE sendRequests #-}
+sendRequests opts appstate = mapM_ (sendRequest opts appstate)
 
-sendResponse :: Options -> AppState -> Response -> IO ()
-{-# INLINE sendResponse #-}
-sendResponse opts (_, socketpool) (B.Response _ service reqs) = do
-  let response = A.encode $ A.toJSON $ map toJSON reqs
-  Z.send' (socketpool M.! B.port service) [] response
-  when (debug opts) $ T.putStrLn $ T.unwords ["broker", showReqs , "->", T.pack $ show service]
-  where
-    toJSON req = case req of
-      B.VersionMessage vers -> A.toJSON vers
-      B.ProductMessage prod -> A.toJSON prod
-    showReqs :: T.Text
-    showReqs = T.unwords $ concat $ forM reqs $ \req ->
-      case req of
-        B.VersionMessage ver  -> ["version", toText (V.source ver)]
-        B.ProductMessage prod -> [toText (P.product prod), "/", toText (P.language prod)]
+sendRequest :: Options -> AppState -> Request -> IO ()
+{-# INLINE sendRequest #-}
+sendRequest opts (broker, socketpool) req@Req.Request {Req.serviceID = sid} = do
+  let encoding = A.encode req
+      maybeSocket = do
+        service <- M.lookup sid (B.services broker)
+        M.lookup (B.port service) socketpool
+  case maybeSocket of
+    Just sock -> do
+      Z.send' sock [] encoding
+      when (debug opts) $ T.putStrLn $ T.unwords ["broker", "->", T.pack $ show sid]
+    Nothing -> return ()
 
 convertBslToBs :: BSL.ByteString -> BS.ByteString
 convertBslToBs msg =
