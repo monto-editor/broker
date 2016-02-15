@@ -16,7 +16,8 @@ $(deriveJSON defaultOptions ''Message)
 data Request = Request
     { source :: Source
     , serviceID :: ServiceID
-    , requirements :: [Message]}
+    , requirements :: [Message]
+    }
   deriving (Ord,Show)
 
 instance Eq Request where
