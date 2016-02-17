@@ -6,6 +6,8 @@ import           Control.Arrow
 
 import qualified Data.Set as S
 
+import           Debug.Trace
+
 import qualified Monto.Broker as B
 import qualified Monto.SourceMessage as S
 import qualified Monto.ProductMessage as P
@@ -31,9 +33,10 @@ spec = do
       javaCodeCompletion = "javaCodeCompletion" :: ServiceID
       javaParser = "javaParser" :: ServiceID
       javaTokenizer = "javaTokenizer" :: ServiceID
-      javaSource = PDEP.SourceDependency java
+      javaSource = PDEP.ProductDependency "source" "source" java
       s1 i = S.SourceMessage i "s1" "java" "" Nothing
       s2 i = S.SourceMessage i "s2" "java" "" Nothing
+      s3 i = S.SourceMessage i "s3" "java" "" Nothing
       astMsg vid src = P.ProductMessage vid src javaParser ast java ""
       typMsg vid src = P.ProductMessage vid src javaTypechecker errors java ""
       comMsg vid src = P.ProductMessage vid src javaCodeCompletion completions java ""
@@ -41,6 +44,16 @@ spec = do
       v1 = VersionID 1
       newVersion' v b = first S.fromList $ B.newVersion v b
       newProduct' v b = first S.fromList $ B.newProduct v b
+      python = "python" :: Language
+      productA = "productA" :: Product
+      productB = "productB" :: Product
+      s20 i = S.SourceMessage i "s20" "python" "" Nothing
+      s21 i = S.SourceMessage i "s21" "python" "" Nothing
+      serviceA = "serviceA" :: ServiceID
+      serviceB = "serviceB" :: ServiceID
+      pythonSource = PDEP.ProductDependency "source" "source" python
+      productAMsg vid src = P.ProductMessage vid src serviceA productA python ""
+      productBMsg vid src = P.ProductMessage vid src serviceB productB python ""
 
   context  "Static Dependencies" $ do
 
@@ -86,7 +99,9 @@ spec = do
 
   context "Product Dependencies" $ do
 
-    let broker = register javaTypechecker [PD.ProductDescription errors java] [javaSource,ProductDependency javaParser ast java]
+    let broker = register serviceB [PD.ProductDescription productB python] [PDEP.ProductDependency serviceA productA python]
+               $ register serviceA [PD.ProductDescription productA python] [pythonSource]
+               $ register javaTypechecker [PD.ProductDescription errors java] [javaSource,PDEP.ProductDependency javaParser ast java]
                $ register javaParser [PD.ProductDescription ast java] [javaSource]
                $ B.empty (Port 5010) (Port 5020)
 
@@ -98,30 +113,70 @@ spec = do
       --     ^       ^       ^
       --   type <- type <- type
       --
+      --
+      --    s20      s21
+      --     ^        ^
+      --   prodA <- prodA
+      --     ^        ^
+      --   prodB    prodB
+      --
       void $ flip execStateT broker $ do
-        B.registerDynamicDependency "s2" javaTypechecker
-             [("s1",javaTypechecker,errors,java)] `shouldBe'` ["s1"]
 
-        B.registerDynamicDependency "s3" javaTypechecker
-             [("s2",javaTypechecker,errors,java)] `shouldBe'` ["s2"]
+        let serviceAs20 = productAMsg v1 "s20"
 
-        B.newVersion (s1 v1) `shouldBe'`
-          [Request "s1" javaParser [SourceMessage (s1 v1)]]
+        trace "p20 <- p21" $ B.registerDynamicDependency
+            "s21" serviceA
+            [([(productA, python)], ("s20", serviceA))] `shouldBe'`
+          ["s20"]
+
+        trace "s20" $ B.newVersion (s20 v1) `shouldBe'`
+          [Request "s20" serviceA [SourceMessage (s20 v1)]]
+
+        trace "s21" $ B.newVersion (s21 v1) `shouldBe'`
+          [Request "s21" serviceA [SourceMessage (s21 v1)]]
+
+        trace "service + prod dep test" $ B.newProduct serviceAs20 `shouldBe'`
+          [Request "s20" serviceB [ProductMessage serviceAs20], Request "s21" serviceA [ProductMessage serviceAs20]] --, VersionMessage (s21 v1)]]
 
         let ast1s1 = astMsg v1 "s1"
             ast1s2 = astMsg v1 "s2"
+            ast1s3 = astMsg v1 "s3"
             typ1s1 = typMsg v1 "s1"
+            typ1s2 = typMsg v1 "s2"
+            typ1s3 = typMsg v1 "s3"
 
-        B.newProduct ast1s1 `shouldBe'`
-          [Request "s1" javaTypechecker [ProductMessage ast1s1]]
+        trace "t2 <- t3" $ B.registerDynamicDependency "s3" javaTypechecker
+          [([(errors, java)], ("s2",javaTypechecker))] `shouldBe'` ["s2"]
 
-        B.newVersion (s2 v1) `shouldBe'`
+        trace "s1" $ B.newVersion (s1 v1) `shouldBe'`
+          [Request "s1" javaParser [SourceMessage (s1 v1)]]
+
+        trace "a1" $ B.newProduct ast1s1 `shouldBe'`
+          [Request "s1" javaTypechecker [ProductMessage ast1s1, SourceMessage (s1 v1)]]
+
+        trace "s2" $ B.newVersion (s2 v1) `shouldBe'`
           [Request "s2" javaParser [SourceMessage (s2 v1)]]
 
-        B.newProduct ast1s2 `shouldBe'` []
+        trace "a2" $ B.newProduct ast1s2 `shouldBe'`
+          [Request "s2" javaTypechecker [ProductMessage ast1s2, SourceMessage (s2 v1)]]
 
-        B.newProduct typ1s1 `shouldBe'`
-          [Request "s2" javaTypechecker [ProductMessage ast1s2,ProductMessage typ1s1]]
+        trace "t1 <- t2" $ B.registerDynamicDependency "s2" javaTypechecker
+          [([(errors, java)], ("s1",javaTypechecker))] `shouldBe'` ["s1"]
+
+        trace "t1" $ B.newProduct typ1s1 `shouldBe'`
+          [Request "s2" javaTypechecker [ProductMessage typ1s1]]
+
+--        trace "t2" $ B.newProduct typ1s2 `shouldBe'`
+--          []
+
+        trace "s3" $ B.newVersion (s3 v1) `shouldBe'`
+          [Request "s3" javaParser [SourceMessage (s3 v1)]]
+
+--        trace "a3" $ B.newProduct ast1s3 `shouldBe'`
+--          [Request "s3" javaTypechecker [ProductMessage typ1s2, ProductMessage ast1s3, VersionMessage (s3 v1)]]
+
+--        B.newProduct typ1s1 `shouldBe'`
+--          [Request "s2" javaTypechecker [ProductMessage ast1s2,ProductMessage typ1s1]]
 
   where
     shouldBe' actual expected = do
