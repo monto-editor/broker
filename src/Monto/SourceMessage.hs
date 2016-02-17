@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Monto.VersionMessage where
+module Monto.SourceMessage where
 
 import           Prelude hiding (id)
 import           Data.Text (Text)
@@ -12,21 +12,16 @@ data Selection = Selection { begin :: Int, end :: Int }
   deriving (Eq,Show)
 $(deriveJSON defaultOptions ''Selection)
 
-data VersionMessage =
-  VersionMessage
-    { versionId  :: VersionID
+data SourceMessage =
+  SourceMessage
+    { id         :: VersionID
     , source     :: Source
     , language   :: Language
     , contents   :: Text
     , selections :: Maybe (Vector Selection)
     } deriving (Eq,Show)
-$(deriveJSON (defaultOptions {
-  fieldLabelModifier = \s -> case s of
-    "versionId" -> "version_id"
-    label -> label
-}) ''VersionMessage)
+$(deriveJSON defaultOptions ''SourceMessage)
 
-
-instance Ord VersionMessage where
-  compare v1 v2 = compare (versionId v1, source v1, language v1, contents v1)
-                          (versionId v2, source v2, language v2, contents v2)
+instance Ord SourceMessage where
+  compare v1 v2 = compare (id v1, source v1, language v1, contents v1)
+                          (id v2, source v2, language v2, contents v2)

@@ -30,8 +30,8 @@ import           Data.Map (Map)
 import qualified Data.Map as M
 
 import           Monto.Types
-import           Monto.VersionMessage (VersionMessage)
-import qualified Monto.VersionMessage as V
+import           Monto.SourceMessage (SourceMessage)
+import qualified Monto.SourceMessage as SM
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 import           Monto.ResourceManager (ResourceManager)
@@ -106,13 +106,13 @@ deregisterService serviceID broker = fromMaybe broker $ do
     , serviceOnPort = M.delete (S.port service) (serviceOnPort broker)
     }
 
-newVersion :: VersionMessage -> Broker -> ([Request],Broker)
+newVersion :: SourceMessage -> Broker -> ([Request],Broker)
 {-# INLINE newVersion #-}
-newVersion version broker =
+newVersion srcMsg broker =
   let broker' = broker
-        { resourceMgr = R.updateVersion version $ resourceMgr broker
+        { resourceMgr = R.updateSource srcMsg $ resourceMgr broker
         }
-  in (servicesWithSatisfiedDependencies (V.source version) "source" "source" (V.language version) broker', broker')
+  in (servicesWithSatisfiedDependencies (SM.source srcMsg) "source" "source" (SM.language srcMsg) broker', broker')
 --error $ "TODO: Lookup service and product dependencies and notify "
 --          ++ "services that have satifies dependencies"
 
@@ -134,7 +134,7 @@ servicesWithSatisfiedDependencies src sid prod lang broker = do
   guard (prod == prod' && lang == lang')
   let msgs = forM (DG.lookupDependencies sid' (productDependencies broker)) $ \((prod'',lang''),sid'') ->
                 case sid'' of
-                  ServiceID "source" -> Req.VersionMessage <$> R.lookupVersionMessage src (resourceMgr broker)
+                  ServiceID "source" -> Req.SourceMessage <$> R.lookupSourceMessage src (resourceMgr broker)
                   ServiceID _ -> Req.ProductMessage <$> R.lookupProductMessage (src,sid'',prod'',lang'') (resourceMgr broker)
   maybeToList $ Req.Request src sid' <$> msgs
 

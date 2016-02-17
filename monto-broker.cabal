@@ -28,8 +28,9 @@ library
                        Monto.Request,
                        Monto.ResourceManager,
                        Monto.Service,
-                       Monto.Types,
-                       Monto.VersionMessage
+                       Monto.SourceMessage,
+                       Monto.Types
+
   build-depends:       base,
                        aeson,
                        bytestring,

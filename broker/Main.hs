@@ -32,8 +32,8 @@ import           Monto.Request (Request)
 import qualified Monto.RegisterServiceRequest as RQ
 import qualified Monto.RegisterServiceResponse as RS
 import           Monto.Types
-import           Monto.VersionMessage (VersionMessage)
-import qualified Monto.VersionMessage as V
+import           Monto.SourceMessage (SourceMessage)
+import qualified Monto.SourceMessage as S
 
 import           Options.Applicative
 
@@ -107,8 +107,8 @@ runSourceThread opts ctx appstate = forkIO $
       rawMsg <- Z.receive src
       case A.decodeStrict rawMsg of
         Just msg -> do
-          when (debug opts) $ putStrLn $ unwords ["version", show (V.source msg),"->", "broker"]
-          modifyMVar_ appstate $ onVersionMessage opts msg
+          when (debug opts) $ putStrLn $ unwords ["version", show (S.source msg),"->", "broker"]
+          modifyMVar_ appstate $ onSourceMessage opts msg
         Nothing -> putStrLn "message is not a version message"
 
 runRegisterThread :: Options -> Context -> MVar AppState -> IO ThreadId
@@ -209,9 +209,9 @@ onDeregisterMessage deregMsg socket (broker, socketPool)= do
       return (broker', socketPool)
     Nothing -> return (broker, socketPool)
 
-onVersionMessage :: Options -> VersionMessage -> AppState -> IO AppState
-{-# INLINE onVersionMessage #-}
-onVersionMessage = onMessage B.newVersion
+onSourceMessage :: Options -> SourceMessage -> AppState -> IO AppState
+{-# INLINE onSourceMessage #-}
+onSourceMessage = onMessage B.newVersion
 
 onProductMessage :: Options -> ProductMessage -> AppState -> IO AppState
 {-# INLINE onProductMessage #-}

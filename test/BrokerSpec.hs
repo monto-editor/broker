@@ -7,7 +7,7 @@ import           Control.Arrow
 import qualified Data.Set as S
 
 import qualified Monto.Broker as B
-import qualified Monto.VersionMessage as V
+import qualified Monto.SourceMessage as S
 import qualified Monto.ProductMessage as P
 import qualified Monto.ProductDescription as PD
 import           Monto.ProductDependency as PDEP
@@ -32,8 +32,8 @@ spec = do
       javaParser = "javaParser" :: ServiceID
       javaTokenizer = "javaTokenizer" :: ServiceID
       javaSource = PDEP.SourceDependency java
-      s1 i = V.VersionMessage i "s1" "java" "" Nothing
-      s2 i = V.VersionMessage i "s2" "java" "" Nothing
+      s1 i = S.SourceMessage i "s1" "java" "" Nothing
+      s2 i = S.SourceMessage i "s2" "java" "" Nothing
       astMsg vid src = P.ProductMessage vid src javaParser ast java ""
       typMsg vid src = P.ProductMessage vid src javaTypechecker errors java ""
       comMsg vid src = P.ProductMessage vid src javaCodeCompletion completions java ""
@@ -54,14 +54,14 @@ spec = do
       void $ flip execStateT broker $ do
 
         newVersion' (s1 v1) `shouldBe'` S.fromList
-           [ Request "s1" javaParser [VersionMessage (s1 v1)]
-           , Request "s1" javaTokenizer [VersionMessage (s1 v1)]
+           [ Request "s1" javaParser [SourceMessage (s1 v1)]
+           , Request "s1" javaTokenizer [SourceMessage (s1 v1)]
            ]
 
         let ast1 = astMsg v1 "s1"
         newProduct' ast1 `shouldBe'` S.fromList
-           [ Request "s1" javaCodeCompletion [VersionMessage (s1 v1), ProductMessage ast1]
-           , Request "s1" javaTypechecker [VersionMessage (s1 v1), ProductMessage ast1]
+           [ Request "s1" javaCodeCompletion [SourceMessage (s1 v1), ProductMessage ast1]
+           , Request "s1" javaTypechecker [SourceMessage (s1 v1), ProductMessage ast1]
            ]
 
         newProduct' (tokMsg v1 "s1") `shouldBe'` S.fromList []
@@ -74,8 +74,8 @@ spec = do
             outdatedId = VersionID 41
 
         newVersion' (s1 currentId) `shouldBe'` S.fromList
-           [ Request "s1" javaParser [VersionMessage (s1 currentId)]
-           , Request "s1" javaTokenizer [VersionMessage (s1 currentId)]
+           [ Request "s1" javaParser [SourceMessage (s1 currentId)]
+           , Request "s1" javaTokenizer [SourceMessage (s1 currentId)]
            ]
 
         -- outdated product arrives
@@ -106,7 +106,7 @@ spec = do
              [("s2",javaTypechecker,errors,java)] `shouldBe'` ["s2"]
 
         B.newVersion (s1 v1) `shouldBe'`
-          [Request "s1" javaParser [VersionMessage (s1 v1)]]
+          [Request "s1" javaParser [SourceMessage (s1 v1)]]
 
         let ast1s1 = astMsg v1 "s1"
             ast1s2 = astMsg v1 "s2"
@@ -116,7 +116,7 @@ spec = do
           [Request "s1" javaTypechecker [ProductMessage ast1s1]]
 
         B.newVersion (s2 v1) `shouldBe'`
-          [Request "s2" javaParser [VersionMessage (s2 v1)]]
+          [Request "s2" javaParser [SourceMessage (s2 v1)]]
 
         B.newProduct ast1s2 `shouldBe'` []
 
