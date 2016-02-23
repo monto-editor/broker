@@ -53,7 +53,6 @@ spec = do
       serviceB = "serviceB" :: ServiceID
       pythonSource = PDEP.ProductDependency "source" "source" python
       productAMsg vid src = P.ProductMessage vid src serviceA productA python ""
-      productBMsg vid src = P.ProductMessage vid src serviceB productB python ""
 
   context  "Static Dependencies" $ do
 
@@ -175,8 +174,11 @@ spec = do
         trace "a3" $ B.newProduct ast1s3 `shouldBe'`
           [Request "s3" javaTypechecker [ProductMessage typ1s2, ProductMessage ast1s3, SourceMessage (s3 v1)]]
 
-        B.newProduct typ1s1 `shouldBe'`
+        trace "t1" $ B.newProduct typ1s1 `shouldBe'`
           [Request "s2" javaTypechecker [ProductMessage ast1s2, ProductMessage typ1s1, SourceMessage(s2 v1)]]
+
+        trace "t3" $ B.newProduct typ1s3 `shouldBe'`
+          []
 
   where
     shouldBe' actual expected = do
