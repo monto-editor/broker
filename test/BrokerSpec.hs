@@ -133,10 +133,10 @@ spec = do
           [Request "s20" serviceA [SourceMessage (s20 v1)]]
 
         trace "s21" $ B.newVersion (s21 v1) `shouldBe'`
-          [Request "s21" serviceA [SourceMessage (s21 v1)]]
+          []
 
         trace "service + prod dep test" $ B.newProduct serviceAs20 `shouldBe'`
-          [Request "s20" serviceB [ProductMessage serviceAs20], Request "s21" serviceA [ProductMessage serviceAs20]] --, VersionMessage (s21 v1)]]
+          [Request "s20" serviceB [ProductMessage serviceAs20], Request "s21" serviceA [ProductMessage serviceAs20, SourceMessage (s21 v1)]]
 
         let ast1s1 = astMsg v1 "s1"
             ast1s2 = astMsg v1 "s2"
@@ -164,19 +164,19 @@ spec = do
           [([(errors, java)], ("s1",javaTypechecker))] `shouldBe'` ["s1"]
 
         trace "t1" $ B.newProduct typ1s1 `shouldBe'`
-          [Request "s2" javaTypechecker [ProductMessage typ1s1]]
+          [Request "s2" javaTypechecker [ProductMessage typ1s1, ProductMessage ast1s2, SourceMessage(s2 v1)]]
 
---        trace "t2" $ B.newProduct typ1s2 `shouldBe'`
---          []
+        trace "t2" $ B.newProduct typ1s2 `shouldBe'`
+          []
 
         trace "s3" $ B.newVersion (s3 v1) `shouldBe'`
           [Request "s3" javaParser [SourceMessage (s3 v1)]]
 
---        trace "a3" $ B.newProduct ast1s3 `shouldBe'`
---          [Request "s3" javaTypechecker [ProductMessage typ1s2, ProductMessage ast1s3, VersionMessage (s3 v1)]]
+        trace "a3" $ B.newProduct ast1s3 `shouldBe'`
+          [Request "s3" javaTypechecker [ProductMessage typ1s2, ProductMessage ast1s3, SourceMessage (s3 v1)]]
 
---        B.newProduct typ1s1 `shouldBe'`
---          [Request "s2" javaTypechecker [ProductMessage ast1s2,ProductMessage typ1s1]]
+        B.newProduct typ1s1 `shouldBe'`
+          [Request "s2" javaTypechecker [ProductMessage ast1s2, ProductMessage typ1s1, SourceMessage(s2 v1)]]
 
   where
     shouldBe' actual expected = do

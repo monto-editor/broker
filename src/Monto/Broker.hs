@@ -22,8 +22,6 @@ import           Prelude hiding (product)
 import           Control.Applicative hiding (empty)
 #endif
 
-import           Control.Monad
-
 import           Data.Maybe
 import qualified Data.List as List
 import           Data.Map (Map)
@@ -31,8 +29,6 @@ import qualified Data.Map as M
 
 import           Debug.Trace
 
-import           Monto.DynamicDependency (DynamicDependency)
-import           Monto.DynamicDependency
 import           Monto.Types
 import           Monto.SourceMessage (SourceMessage)
 import qualified Monto.SourceMessage as SM
@@ -120,9 +116,8 @@ newVersion srcMsg broker =
         }
       source = SM.source srcMsg
       serviceID = "source"
-      product = "source"
       language = SM.language srcMsg
-  in (servicesWithSatisfiedDependencies source serviceID product language broker', broker')
+  in (servicesWithSatisfiedDependencies source serviceID language broker', broker')
 
 newProduct :: ProductMessage -> Broker -> ([Request],Broker)
 {-# INLINE newProduct #-}
@@ -134,69 +129,38 @@ newProduct pr broker
           }
         source = P.source pr
         serviceID = P.serviceID pr
-        product = P.product pr
         language = P.language pr
-    in (servicesWithSatisfiedDependencies source serviceID product language broker', broker')
+    in (servicesWithSatisfiedDependencies source serviceID language broker', broker')
 
-servicesWithSatisfiedDependencies :: Source -> ServiceID -> Product -> Language -> Broker -> [Request]
-servicesWithSatisfiedDependencies source serviceID product language broker =
-  let rMgr = resourceMgr broker
-      productGraph = productDependencies broker :: DependencyGraph ServiceID [(Product, Language)]
-      dynamicGraph = dynamicDependencies broker :: DependencyGraph (Source, ServiceID) [(Product, Language)]
+servicesWithSatisfiedDependencies :: Source -> ServiceID -> Language -> Broker -> [Request]
+servicesWithSatisfiedDependencies source serviceID language broker =
+  let reverseDeps = reverseDependenciesOf source serviceID language broker :: [([(Product, Language)], (Source, ServiceID))]
+      depsOfReverseDeps = dependenciesOf reverseDeps language broker :: [(([(Product, Language)], (Source, ServiceID)), [([(Product, Language)], (Source, ServiceID))])]
+  in catMaybes $ map (satisfiedDependencies $ resourceMgr broker) depsOfReverseDeps
 
-      reverseProductDeps = filterByLanguage language $ DG.lookupReverseDependencies serviceID productGraph :: [([(Product, Language)], ServiceID)]
-      reverseDynamicDeps = filterByLanguage language $ DG.lookupReverseDependencies (source, serviceID) dynamicGraph :: [([(Product, Language)], (Source, ServiceID))]
+reverseDependenciesOf :: Source -> ServiceID -> Language -> Broker -> [([(Product, Language)], (Source, ServiceID))]
+reverseDependenciesOf source serviceID language broker =
+  let filterLookup dep = filterByLanguage language . DG.lookupReverseDependencies dep
+      reverseProductDeps = map (productToDynamicDependency source) $ filterLookup serviceID $ productDependencies broker
+      reverseDynamicDeps = filterLookup (source, serviceID) $ dynamicDependencies broker
+  in reverseProductDeps ++ reverseDynamicDeps
 
-      productDepsOfReverseProductDeps = map (filterByLanguage language) $ dependenciesOf productGraph reverseProductDeps :: [[([(Product, Language)], ServiceID)]]
-      dynamicDepsOfReverseDynamicDeps = map (filterByLanguage language) $ dependenciesOf dynamicGraph reverseDynamicDeps :: [[([(Product, Language)], (Source, ServiceID))]]
+dependenciesOf :: [([(Product, Language)], (Source, ServiceID))] -> Language -> Broker -> [(([(Product, Language)], (Source, ServiceID)), [([(Product, Language)], (Source, ServiceID))])]
+dependenciesOf deps language broker =
+  flip map deps $ \(edges, (source, serviceID)) ->
+    let productDeps = map (productToDynamicDependency source) $ filterByLanguage language $ DG.lookupDependencies serviceID $ productDependencies broker
+        dynamicDeps = filterByLanguage language $ DG.lookupDependencies (source, serviceID) $ dynamicDependencies broker
+    in ((edges, (source, serviceID)), productDeps ++ dynamicDeps)
 
-      productDepsOfReverseDynamicDeps = map (filterByLanguage language) $ dependenciesOf productGraph (map dynamicToProductDependency reverseDynamicDeps) :: [[([(Product, Language)], ServiceID)]]
-      dynamicDepsOfReverseProductDeps = map (filterByLanguage language) $ dependenciesOf dynamicGraph (map (productToDynamicDependency source) reverseProductDeps) :: [[([(Product, Language)], (Source, ServiceID))]]
-
-      allDepsOfReverseProductDeps = zip reverseProductDeps $ productDepsOfReverseProductDeps ++ (deepMap dynamicToProductDependency dynamicDepsOfReverseProductDeps) :: [(([(Product, Language)], ServiceID), [([(Product, Language)], ServiceID)])]
-      allDepsOfReverseDynamicDeps = zip reverseDynamicDeps $ dynamicDepsOfReverseDynamicDeps ++ (deepMap (productToDynamicDependency source) productDepsOfReverseDynamicDeps) :: [(([(Product, Language)], (Source, ServiceID)), [([(Product, Language)], (Source, ServiceID))])]
-
-      allDeps = (flip map allDepsOfReverseProductDeps $ \((list, serviceID), deps) ->
-                  ((list, (source, serviceID)), (flip map deps $ \(list', serviceID') ->
-                          ((list', (source, serviceID')))))) ++ allDepsOfReverseDynamicDeps
-      allRequests = flip map allDeps $ \((_, (source', serviceID)), dynamicDeps') ->
-        let msgs = concat $ map (dynamicDependencyToMessage rMgr) dynamicDeps'
-        in if foldl (\bool req -> bool || isNothing req) False msgs
-          then Nothing
-          else Just $ Req.Request source' serviceID $ catMaybes msgs
-  in catMaybes allRequests
-
-filterByLanguage :: Language -> [([(Product, Language)], a)] -> [([(Product, Language)], a)]
-filterByLanguage language list =
-  let list' = flip map list $
-        \(edges, nodes) ->
-          let filteredEdges = filter (\(product, language') -> language == language') edges
-          in (filteredEdges, nodes)
-  in filter (\(edges, nodes) -> length edges /= 0) list'
-
-
-
-deepMap :: (a -> b) -> [[a]] -> [[b]]
-deepMap f = map (map f)
-
-dependenciesOf :: Ord a => DependencyGraph a b -> [(b, a)] -> [[(b, a)]]
-dependenciesOf graph =
-  map (\(e, d) -> DG.lookupDependencies d graph)
-
-satisfiedDependencies :: Broker -> [(Source, ServiceID)] -> Maybe Request
-satisfiedDependencies broker productNodes = undefined
+satisfiedDependencies :: ResourceManager -> (([(Product, Language)], (Source, ServiceID)), [([(Product, Language)], (Source, ServiceID))]) -> Maybe Request
+satisfiedDependencies rMgr ((_, (source', serviceID)), dynamicDeps') =
+  let msgs = concat $ map (dynamicDependencyToMessage rMgr) dynamicDeps'
+  in if foldl (\bool req -> bool || isNothing req) False msgs
+    then Nothing
+    else Just $ Req.Request source' serviceID $ catMaybes msgs
 
 productToDynamicDependency :: Source -> ([(Product, Language)], ServiceID) -> ([(Product, Language)], (Source, ServiceID))
 productToDynamicDependency source (edges, serviceID) = (edges, (source, serviceID))
-
-dynamicToProductDependency :: ([(Product, Language)], (Source, ServiceID)) -> ([(Product, Language)], ServiceID)
-dynamicToProductDependency (edges, (_, serviceID)) = (edges, serviceID)
-
-productDependencyToMessage :: Source -> ResourceManager -> ([(Product, Language)], ServiceID) -> [Maybe Req.Message]
-productDependencyToMessage source rMgr (edges, serviceID) =
-  if serviceID == "source"
-    then [Req.SourceMessage <$> R.lookupSourceMessage source rMgr]
-    else map (\(product, language) -> Req.ProductMessage <$> R.lookupProductMessage (source, serviceID, product, language) rMgr) edges
 
 dynamicDependencyToMessage :: ResourceManager -> ([(Product, Language)], (Source, ServiceID)) -> [Maybe Req.Message]
 dynamicDependencyToMessage rMgr (edges, (source, serviceID)) =
@@ -204,10 +168,17 @@ dynamicDependencyToMessage rMgr (edges, (source, serviceID)) =
     then [Req.SourceMessage <$> R.lookupSourceMessage source rMgr]
     else map (\(product, language) -> Req.ProductMessage <$> R.lookupProductMessage (source, serviceID, product, language) rMgr) edges
 
+filterByLanguage :: Language -> [([(Product, Language)], a)] -> [([(Product, Language)], a)]
+filterByLanguage language list =
+  let list' = flip map list $ \(edges, nodes) ->
+        let filteredEdges = filter (\(_, language') -> language == language') edges
+        in (filteredEdges, nodes)
+  in filter (\(edges, _) -> length edges /= 0) list'
+
 registerDynamicDependency :: Source -> ServiceID -> [([(Product, Language)], (Source, ServiceID))] -> Broker -> ([Source],Broker)
 registerDynamicDependency source serviceID dependsOn broker =
   let dynamicDependencies' = DG.register (source, serviceID) dependsOn (dynamicDependencies broker)
-      sources = List.map (\(_, (source, _)) -> source) dependsOn
+      sources = map (\(_, (source', _)) -> source') dependsOn
       broker' = broker
         { dynamicDependencies = dynamicDependencies'
         }
