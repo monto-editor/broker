@@ -123,13 +123,16 @@ spec = do
 
         let serviceAs20 = productAMsg v1 "s20"
 
-        trace "p20 <- p21" $ B.registerDynamicDependency
+        trace "s20" $ B.newVersion (s20 v1) `shouldBe'`
+          [Request "s20" serviceA [SourceMessage (s20 v1)]]
+
+        trace "s21" $ B.newVersion (s21 v1) `shouldBe'`
+          [Request "s21" serviceA [SourceMessage (s21 v1)]]
+
+        trace "pA20 <- pA21" $ B.registerDynamicDependency
             "s21" serviceA
             [([(productA, python)], ("s20", serviceA))] `shouldBe'`
           ["s20"]
-
-        trace "s20" $ B.newVersion (s20 v1) `shouldBe'`
-          [Request "s20" serviceA [SourceMessage (s20 v1)]]
 
         trace "s21" $ B.newVersion (s21 v1) `shouldBe'`
           []
@@ -179,6 +182,16 @@ spec = do
 
         trace "t3" $ B.newProduct typ1s3 `shouldBe'`
           []
+
+    -- A
+    -- ^
+    -- B < D    D3   A1
+    -- ^   ^    ^    ^
+    -- |  /     B2   B3
+    -- C         ^    ^
+    -- ^          \  /
+    -- E           C1
+    --
 
   where
     shouldBe' actual expected = do
