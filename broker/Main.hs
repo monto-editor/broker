@@ -86,10 +86,10 @@ run opts ctx snk = do
 
   let broker = B.empty (fromPort opts) (toPort opts)
   appstate <- newMVar (broker, M.empty)
-  sourceThread <- runSourceThread opts ctx appstate
-  registerThread <- runRegisterThread opts ctx appstate
-  discoverThread <- runDiscoverThread opts ctx appstate
-  threads <- forM (B.portPool broker) $ runServiceThread opts ctx snk appstate
+  sourceThread <- forkIO $ runSourceThread opts ctx appstate
+  registerThread <- forkIO $ runRegisterThread opts ctx appstate
+  discoverThread <- forkIO $ runDiscoverThread opts ctx appstate
+  threads <- forM (B.portPool broker) $ forkIO . runServiceThread opts ctx snk appstate
 
   _ <- readMVar interrupted
   forM_ threads killThread
@@ -97,25 +97,25 @@ run opts ctx snk = do
   killThread registerThread
   killThread sourceThread
 
-runSourceThread :: Options -> Context -> MVar AppState -> IO ThreadId
-runSourceThread opts ctx appstate = forkIO $
+runSourceThread :: Options -> Context -> MVar AppState -> IO ()
+runSourceThread opts ctx appstate =
   Z.withSocket ctx Z.Sub $ \src -> do
     Z.bind src $ source opts
     Z.subscribe src ""
-    putStrLn $ unwords ["listen on address", source opts, "for versions"]
+    T.putStrLn $ T.unwords ["listen on address", T.pack (source opts), "for versions"]
     forever $ do
       rawMsg <- Z.receive src
       case A.decodeStrict rawMsg of
         Just msg -> do
-          when (debug opts) $ putStrLn $ unwords ["version", show (S.source msg),"->", "broker"]
+          when (debug opts) $ T.putStrLn $ T.unwords [toText (S.source msg),"->", "broker"]
           modifyMVar_ appstate $ onSourceMessage opts msg
         Nothing -> putStrLn "message is not a version message"
 
-runRegisterThread :: Options -> Context -> MVar AppState -> IO ThreadId
-runRegisterThread opts ctx appstate = forkIO $
+runRegisterThread :: Options -> Context -> MVar AppState -> IO ()
+runRegisterThread opts ctx appstate =
   Z.withSocket ctx Z.Rep $ \socket -> do
     Z.bind socket (registration opts)
-    putStrLn $ unwords ["listen on address", registration opts, "for registrations"]
+    T.putStrLn $ T.unwords ["listen on address", T.pack (registration opts), "for registrations"]
     forever $ do
       rawMsg <- Z.receive socket
       case (A.eitherDecodeStrict rawMsg, A.eitherDecodeStrict rawMsg) of
@@ -125,21 +125,21 @@ runRegisterThread opts ctx appstate = forkIO $
           printf "Couldn't parse message: %s\n%s\n%s\n" (BS.unpack rawMsg) r d
           sendRegisterServiceResponse socket "failed: service did not register correctly" Nothing
 
-runDiscoverThread :: Options -> Context -> MVar AppState -> IO ThreadId
-runDiscoverThread opts ctx appstate = forkIO $
+runDiscoverThread :: Options -> Context -> MVar AppState -> IO ()
+runDiscoverThread opts ctx appstate =
   Z.withSocket ctx Z.Rep $ \discSocket -> do
     Z.bind discSocket (discovery opts)
-    putStrLn $ unwords ["listen on address", discovery opts, "for discover requests"]
+    T.putStrLn $ T.unwords ["listen on address", T.pack (discovery opts), "for discover requests"]
     forever $ do
       _ <- Z.receive discSocket
-      printf "discover request\n"
+      when (debug opts) $ printf "discover request\n"
       (broker, _) <- readMVar appstate
       let services = findServices broker
-      printf "discover response: %s\n" (show services)
+      when (debug opts) $ printf "discover response: %s\n" (show services)
       Z.send discSocket [] $ convertBslToBs $ A.encode services
 
-runServiceThread :: Options -> Context -> Socket Pub -> MVar AppState -> Port -> IO ThreadId
-runServiceThread opts ctx snk appstate port@(Port p) = forkIO $
+runServiceThread :: Options -> Context -> Socket Pub -> MVar AppState -> Port -> IO ()
+runServiceThread opts ctx snk appstate port@(Port p) =
   Z.withSocket ctx Z.Pair $ \sckt -> do
     Z.bind sckt ("tcp://*:" ++ show p)
     printf "listen on address tcp://*:%d for service\n" p
@@ -158,7 +158,7 @@ runServiceThread opts ctx snk appstate port@(Port p) = forkIO $
            , toText serviceID
            ]
         Z.send snk [] rawMsg
-        when (debug opts) $ T.putStrLn $ T.unwords [toText serviceID, toText $ P.source msg', "->", "broker"]
+        when (debug opts) $ T.putStrLn $ T.concat [toText serviceID, "/", toText $ P.product msg', "/", toText $ P.language msg', " -> broker"]
         modifyMVar_ appstate $ onProductMessage opts msg'
 
 findServices :: Broker -> [DiscoverResponse]
@@ -238,7 +238,7 @@ sendRequest opts (broker, socketpool) req@Req.Request {Req.serviceID = sid} = do
   case maybeSocket of
     Just sock -> do
       Z.send' sock [] encoding
-      when (debug opts) $ T.putStrLn $ T.unwords ["broker", "->", T.pack $ show sid]
+      when (debug opts) $ T.putStrLn $ T.unwords ["broker", "->", toText sid]
     Nothing -> return ()
 
 convertBslToBs :: BSL.ByteString -> BS.ByteString
