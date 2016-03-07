@@ -25,10 +25,13 @@ import qualified Monto.Broker as B
 import qualified Monto.DeregisterService as D
 import           Monto.DiscoverResponse (DiscoverResponse)
 import qualified Monto.DiscoverResponse as DiscoverResp
+import qualified Monto.DynamicDependency as DD
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 import qualified Monto.Request as Req
 import           Monto.Request (Request)
+import qualified Monto.Require as RQI
+import qualified Monto.RegisterDynamicDependencies as RD
 import qualified Monto.RegisterServiceRequest as RQ
 import qualified Monto.RegisterServiceResponse as RS
 import           Monto.Types
@@ -53,6 +56,7 @@ data Options = Options
   , discovery     :: Addr
   , config        :: Addr
   , productTopic  :: Topic
+  , dyndep        :: Addr
   , fromPort      :: Port
   , toPort        :: Port
   }
@@ -65,6 +69,7 @@ options = Options
   <*> strOption   (long "registration" <> help "address for service registration")
   <*> strOption   (long "discovery"    <> help "address for service discovery")
   <*> strOption   (long "config"       <> help "address for service configurations")
+  <*> strOption   (long "dyndep"       <> help "address for dynamic dependency registration")
   <*> option auto (long "topic"        <> help "topic for products that are sent to sinks")
   <*> option auto (long "servicesFrom" <> help "port from which on services can connect")
   <*> option auto (long "servicesTo"   <> help "port to which services can connect")
@@ -93,10 +98,12 @@ run opts ctx snk = do
   sourceThread <- forkIO $ runSourceThread opts ctx appstate
   registerThread <- forkIO $ runRegisterThread opts ctx appstate
   discoverThread <- forkIO $ runDiscoverThread opts ctx appstate
+  dynamicDepThread <- forkIO $ runDynamicDepThread opts ctx snk appstate
   threads <- forM (B.portPool broker) $ forkIO . runServiceThread opts ctx snk appstate
 
   _ <- readMVar interrupted
   forM_ threads killThread
+  killThread dynamicDepThread
   killThread discoverThread
   killThread registerThread
   killThread sourceThread
@@ -129,27 +136,41 @@ runRegisterThread opts ctx appstate =
           printf "Couldn't parse message: %s\n%s\n%s\n" (BS.unpack rawMsg) r d
           sendRegisterServiceResponse socket "failed: service did not register correctly" Nothing
 
+runDynamicDepThread :: Options -> Context -> Socket Pub -> MVar AppState -> IO ()
+runDynamicDepThread opts ctx snk appstate =
+  Z.withSocket ctx Z.Sub $ \socket -> do
+    Z.bind socket $ dyndep opts
+    Z.subscribe socket ""
+    putStrLn $ unwords ["listen on address", dyndep opts, "for dynamic dependency registrations"]
+    forever $ do
+      rawMsg <- Z.receive socket
+      case (A.decodeStrict rawMsg :: Maybe RD.RegisterDynamicDependencies) of
+        Just msg -> do
+          putStrLn $ show msg
+          modifyMVar_ appstate $ onDynamicDependencyRegistration msg snk
+        Nothing -> putStrLn "couldn't parse dynamic dependency registration"
+
 runDiscoverThread :: Options -> Context -> MVar AppState -> IO ()
 runDiscoverThread opts ctx appstate =
-  Z.withSocket ctx Z.Rep $ \discSocket -> do
-    Z.bind discSocket (discovery opts)
+  Z.withSocket ctx Z.Rep $ \socket -> do
+    Z.bind socket (discovery opts)
     T.putStrLn $ T.unwords ["listen on address", T.pack (discovery opts), "for discover requests"]
     forever $ do
-      _ <- Z.receive discSocket
+      _ <- Z.receive socket
       when (debug opts) $ printf "discover request\n"
       (broker, _) <- readMVar appstate
       let services = findServices broker
       when (debug opts) $ printf "discover response: %s\n" (show services)
-      Z.send discSocket [] $ convertBslToBs $ A.encode services
+      Z.send socket [] $ convertBslToBs $ A.encode services
 
 runServiceThread :: Options -> Context -> Socket Pub -> MVar AppState -> Port -> IO ()
 runServiceThread opts ctx snk appstate port@(Port p) =
-  Z.withSocket ctx Z.Pair $ \sckt -> do
-    Z.bind sckt ("tcp://*:" ++ show p)
+  Z.withSocket ctx Z.Pair $ \socket -> do
+    Z.bind socket ("tcp://*:" ++ show p)
     printf "listen on address tcp://*:%d for service\n" p
-    modifyMVar_ appstate $ \(broker, socketPool) -> return (broker, M.insert port sckt socketPool)
+    modifyMVar_ appstate $ \(broker, socketPool) -> return (broker, M.insert port socket socketPool)
     forever $ do
-      rawMsg <- Z.receive sckt
+      rawMsg <- Z.receive socket
       (broker', _) <- readMVar appstate
       let serviceID = getServiceIdByPort port broker'
       let msg = A.decodeStrict rawMsg
@@ -173,6 +194,16 @@ getServiceIdByPort port broker =
 sendRegisterServiceResponse :: Z.Sender a => Socket a -> T.Text -> Maybe Port -> IO ()
 sendRegisterServiceResponse socket text port =
   Z.send socket [] $ convertBslToBs $ A.encode $ RS.RegisterServiceResponse text port
+
+onDynamicDependencyRegistration :: RD.RegisterDynamicDependencies -> Socket Pub -> AppState -> IO AppState
+onDynamicDependencyRegistration msg snk (broker, socketPool) = do
+  let (sources, broker') = B.registerDynamicDependency (RD.source msg) (RD.serviceID msg) (map DD.toGraphTuple $ RD.dependencies msg) broker
+  if (null sources) then
+    return ()
+  else do
+    Z.send snk [Z.SendMore] "require"
+    Z.send snk [] $ convertBslToBs $ A.encode $ RQI.Require sources
+  return (broker', socketPool)
 
 onRegisterMessage :: Z.Sender a => RQ.RegisterServiceRequest -> Socket a -> AppState -> IO AppState
 onRegisterMessage register regSocket (broker, socketPool) = do
