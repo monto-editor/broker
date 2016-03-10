@@ -181,7 +181,7 @@ filterByLanguage language list =
 
 registerDynamicDependency :: Source -> ServiceID -> [DynamicDependency] -> Broker -> ([Source], Broker)
 registerDynamicDependency source serviceID dependsOn broker =
-  (map (\(_, (source', _)) -> source') dependsOn,
+  (List.nub $ map (\(_, (source', _)) -> source') dependsOn,
    broker { dynamicDependencies = DG.register (source, serviceID) dependsOn (dynamicDependencies broker) })
 
 printDependencyGraph :: Broker -> IO ()
