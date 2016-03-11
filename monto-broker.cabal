@@ -29,6 +29,7 @@ library
                        Monto.ResourceManager,
                        Monto.Service,
                        Monto.SourceMessage,
+                       Monto.Subscription,
                        Monto.Types
 
   build-depends:       base,

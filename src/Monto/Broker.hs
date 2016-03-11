@@ -68,6 +68,7 @@ printBroker :: Broker -> IO()
 printBroker broker = do
   print (services broker)
   print (portPool broker)
+  print (productDependencies broker)
 
 registerRequestToService :: Port -> RegisterServiceRequest -> Service
 registerRequestToService port r =

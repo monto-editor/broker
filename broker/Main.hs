@@ -34,6 +34,8 @@ import qualified Monto.RegisterServiceResponse as RS
 import           Monto.Types
 import           Monto.SourceMessage (SourceMessage)
 import qualified Monto.SourceMessage as S
+import           Monto.Subscription (Topic)
+import qualified Monto.Subscription as Sub
 
 import           Options.Applicative
 
@@ -50,20 +52,22 @@ data Options = Options
   , registration  :: Addr
   , discovery     :: Addr
   , config        :: Addr
+  , productTopic  :: Topic
   , fromPort      :: Port
   , toPort        :: Port
   }
 
 options :: Parser Options
 options = Options
-  <$> switch      (short 'd' <> long "debug"        <> help "print messages that are transmitted over the broker")
-  <*> strOption   (short 'k' <> long "sink"         <> help "address of the sink")
-  <*> strOption   (short 'c' <> long "source"       <> help "address of the source")
-  <*> strOption   (short 'r' <> long "registration" <> help "address for service registration")
-  <*> strOption   (short 'i' <> long "discovery"    <> help "address for service discovery")
-  <*> strOption   (short 'o' <> long "config"       <> help "address for service configurations")
-  <*> option auto (short 'f' <> long "servicesFrom" <> help "port from which on services can connect")
-  <*> option auto (short 't' <> long "servicesTo"   <> help "port to which services can connect")
+  <$> switch      (long "debug"        <> help "print messages that are transmitted over the broker")
+  <*> strOption   (long "sink"         <> help "address of the sink")
+  <*> strOption   (long "source"       <> help "address of the source")
+  <*> strOption   (long "registration" <> help "address for service registration")
+  <*> strOption   (long "discovery"    <> help "address for service discovery")
+  <*> strOption   (long "config"       <> help "address for service configurations")
+  <*> option auto (long "topic"        <> help "topic for products that are sent to sinks")
+  <*> option auto (long "servicesFrom" <> help "port from which on services can connect")
+  <*> option auto (long "servicesTo"   <> help "port to which services can connect")
 
 main :: IO ()
 main = do
@@ -150,13 +154,9 @@ runServiceThread opts ctx snk appstate port@(Port p) =
       let serviceID = getServiceIdByPort port broker'
       let msg = A.decodeStrict rawMsg
       for_ msg $ \msg' -> do
-        Z.send snk [Z.SendMore] $
-         BS.unwords $ TextEnc.encodeUtf8 <$>
-           [ toText $ P.source msg'
-           , toText $ P.product msg'
-           , toText $ P.language msg'
-           , toText serviceID
-           ]
+        when (length (productTopic opts) > 0) $
+          Z.send snk [Z.SendMore] $
+            BS.unwords $ TextEnc.encodeUtf8 <$> Sub.topic msg' (productTopic opts)
         Z.send snk [] rawMsg
         when (debug opts) $ T.putStrLn $ T.concat [toText serviceID, "/", toText $ P.product msg', "/", toText $ P.language msg', " -> broker"]
         modifyMVar_ appstate $ onProductMessage opts msg'
