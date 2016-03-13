@@ -19,7 +19,6 @@ library
                        Monto.DiscoverRequest,
                        Monto.DiscoverResponse,
                        Monto.DynamicDependency,
-                       Monto.Edge,
                        Monto.Options,
                        Monto.ProductDependency,
                        Monto.ProductMessage,

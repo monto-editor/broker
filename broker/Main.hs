@@ -19,6 +19,7 @@ import           Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TextEnc
+import           Data.Tuple
 
 import           Monto.Broker (Broker)
 import qualified Monto.Broker as B
@@ -195,9 +196,16 @@ sendRegisterServiceResponse :: Z.Sender a => Socket a -> T.Text -> Maybe Port ->
 sendRegisterServiceResponse socket text port =
   Z.send socket [] $ convertBslToBs $ A.encode $ RS.RegisterServiceResponse text port
 
+toGraphTuples :: [DD.DynamicDependency] -> [([(Product, Language)], (Source, ServiceID))]
+toGraphTuples dyndeps =
+  let toGraphNode dyndep' = (DD.source dyndep', DD.serviceID dyndep')
+      toGraphEdge dyndep' = (DD.product dyndep', DD.language dyndep')
+      insertDynamicDependency map' dyndep' = M.insertWith (++) (toGraphNode dyndep') [toGraphEdge dyndep'] map'
+  in map swap $ M.assocs $ foldl insertDynamicDependency M.empty dyndeps
+
 onDynamicDependencyRegistration :: RD.RegisterDynamicDependencies -> Socket Pub -> AppState -> IO AppState
 onDynamicDependencyRegistration msg snk (broker, socketPool) = do
-  let (sources, broker') = B.registerDynamicDependency (RD.source msg) (RD.serviceID msg) (map DD.toGraphTuple $ RD.dependencies msg) broker
+  let (sources, broker') = B.registerDynamicDependency broker (RD.source msg) (RD.serviceID msg) $ toGraphTuples $ RD.dependencies msg
   if (null sources) then
     return ()
   else do
