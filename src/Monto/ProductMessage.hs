@@ -15,6 +15,7 @@ data ProductMessage =
     , product      :: Product
     , language     :: Language
     , contents     :: Value
+    , time         :: Value
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
