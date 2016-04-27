@@ -56,8 +56,8 @@ data Options = Options
   , registration  :: Addr
   , discovery     :: Addr
   , config        :: Addr
-  , productTopic  :: Topic
   , dyndep        :: Addr
+  , productTopic  :: Topic
   , fromPort      :: Port
   , toPort        :: Port
   }
