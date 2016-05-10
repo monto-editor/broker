@@ -205,7 +205,8 @@ toGraphTuples dyndeps =
 
 onDynamicDependencyRegistration :: RD.RegisterDynamicDependencies -> Socket Pub -> AppState -> IO AppState
 onDynamicDependencyRegistration msg snk (broker, socketPool) = do
-  let (sources, broker') = B.registerDynamicDependency broker (RD.source msg) (RD.serviceID msg) $ toGraphTuples $ RD.dependencies msg
+  let broker' = B.registerDynamicDependency broker (RD.source msg) (RD.serviceID msg) $ toGraphTuples $ RD.dependencies msg
+  let sources = unknownSources broker (RD.serviceID msg) (RD.dependencies msg)
   if (null sources) then
     return ()
   else do
