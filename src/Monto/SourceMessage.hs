@@ -3,14 +3,9 @@ module Monto.SourceMessage where
 
 import           Prelude hiding (id)
 import           Data.Text (Text)
-import           Data.Vector (Vector)
 import           Data.Aeson.TH
 
 import           Monto.Types
-
-data Selection = Selection { begin :: Int, end :: Int }
-  deriving (Eq,Show)
-$(deriveJSON defaultOptions ''Selection)
 
 data SourceMessage =
   SourceMessage
@@ -18,7 +13,6 @@ data SourceMessage =
     , source     :: Source
     , language   :: Language
     , contents   :: Text
-    , selections :: Maybe (Vector Selection)
     } deriving (Eq,Show)
 $(deriveJSON defaultOptions ''SourceMessage)
 
