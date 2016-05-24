@@ -8,6 +8,7 @@ module Monto.Broker
   , registerService
   , deregisterService
   , registerDynamicDependency
+  , unknownSources
   , printDependencyGraph
   , Broker(..)
   , newVersion
@@ -37,6 +38,7 @@ import qualified Monto.ProductDependency as PD
 import qualified Monto.ResourceManager as R
 import           Monto.DependencyGraph (DependencyGraph)
 import qualified Monto.DependencyGraph as DG
+import qualified Monto.DynamicDependency as DD
 import           Monto.RegisterServiceRequest (RegisterServiceRequest)
 import qualified Monto.RegisterServiceRequest as RQ
 import           Monto.Service(Service(Service))
@@ -175,7 +177,7 @@ registerDynamicDependency :: Broker -> Source -> ServiceID -> [DynamicDependency
 registerDynamicDependency broker source serviceID deps =
    broker { dynamicDependencies = DG.register (source, serviceID) deps (dynamicDependencies broker) }
 
-unknownSources :: Broker -> [DynamicDependency] -> [Source]
+unknownSources :: Broker -> [DD.DynamicDependency] -> [Source]
 unknownSources = undefined
 
 printDependencyGraph :: Broker -> IO ()

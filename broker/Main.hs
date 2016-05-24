@@ -11,7 +11,6 @@ import           Control.Monad
 import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as BSL
-import           Data.Foldable (for_)
 import qualified Data.List as List
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -178,11 +177,11 @@ runServiceThread opts ctx snk appstate port@(Port p) =
         Just msg -> do
           when (length (productTopic opts) > 0) $
             Z.send snk [Z.SendMore] $
-              BS.unwords $ TextEnc.encodeUtf8 <$> Sub.topic msg' (productTopic opts)
+              BS.unwords $ TextEnc.encodeUtf8 <$> Sub.topic msg (productTopic opts)
           Z.send snk [] rawMsg
-          when (debug opts) $ T.putStrLn $ T.concat [toText serviceID, "/", toText $ P.product msg', "/", toText $ P.language msg', " -> broker"]
-          modifyMVar_ appstate $ onProductMessage opts msg'
-        Nothing -> putStrln "failed to parse product message"
+          when (debug opts) $ T.putStrLn $ T.concat [toText serviceID, "/", toText $ P.product msg, "/", toText $ P.language msg, " -> broker"]
+          modifyMVar_ appstate $ onProductMessage opts msg
+        Nothing -> putStrLn "failed to parse product message"
 
 findServices :: Broker -> [DiscoverResponse]
 findServices b = do
@@ -207,7 +206,7 @@ toGraphTuples dyndeps =
 onDynamicDependencyRegistration :: RD.RegisterDynamicDependencies -> Socket Pub -> AppState -> IO AppState
 onDynamicDependencyRegistration msg snk (broker, socketPool) = do
   let broker' = B.registerDynamicDependency broker (RD.source msg) (RD.serviceID msg) $ toGraphTuples $ RD.dependencies msg
-  let sources = unknownSources broker (RD.serviceID msg) (RD.dependencies msg)
+  let sources = B.unknownSources broker (RD.dependencies msg)
   if (null sources) then
     return ()
   else do
