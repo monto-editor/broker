@@ -116,11 +116,11 @@ runSourceThread opts ctx appstate =
     T.putStrLn $ T.unwords ["listen on address", T.pack (source opts), "for versions"]
     forever $ do
       rawMsg <- Z.receive src
-      case A.decodeStrict rawMsg of
-        Just msg -> do
+      case A.eitherDecodeStrict rawMsg of
+        Right msg -> do
           when (debug opts) $ T.putStrLn $ T.unwords [toText (S.source msg),"->", "broker"]
           modifyMVar_ appstate $ onSourceMessage opts msg
-        Nothing -> putStrLn "message is not a version message"
+        Left err -> printf "Couldn't parse SourceMessage: %s\n%s\n" (BS.unpack rawMsg) err
 
 runRegisterThread :: Options -> Context -> MVar AppState -> IO ()
 runRegisterThread opts ctx appstate =
@@ -144,11 +144,11 @@ runDynamicDepThread opts ctx snk appstate =
     putStrLn $ unwords ["listen on address", dyndep opts, "for dynamic dependency registrations"]
     forever $ do
       rawMsg <- Z.receive socket
-      case (A.decodeStrict rawMsg :: Maybe RD.RegisterDynamicDependencies) of
-        Just msg -> do
+      case A.eitherDecodeStrict rawMsg of
+        Right msg -> do
           putStrLn $ show msg
           modifyMVar_ appstate $ onDynamicDependencyRegistration msg snk
-        Nothing -> putStrLn "couldn't parse dynamic dependency registration"
+        Left err -> printf "Couldn't parse dynamic dependency registration: %s\n%s\n" (BS.unpack rawMsg) err
 
 runDiscoverThread :: Options -> Context -> MVar AppState -> IO ()
 runDiscoverThread opts ctx appstate =
@@ -173,15 +173,15 @@ runServiceThread opts ctx snk appstate port@(Port p) =
       rawMsg <- Z.receive socket
       (broker', _) <- readMVar appstate
       let serviceID = getServiceIdByPort port broker'
-      case A.decodeStrict rawMsg of
-        Just msg -> do
+      case A.eitherDecodeStrict rawMsg of
+        Right msg -> do
           when (length (productTopic opts) > 0) $
             Z.send snk [Z.SendMore] $
               BS.unwords $ TextEnc.encodeUtf8 <$> Sub.topic msg (productTopic opts)
           Z.send snk [] rawMsg
           when (debug opts) $ T.putStrLn $ T.concat [toText serviceID, "/", toText $ P.product msg, "/", toText $ P.language msg, " -> broker"]
           modifyMVar_ appstate $ onProductMessage opts msg
-        Nothing -> putStrLn "failed to parse product message"
+        Left err -> printf "Couldn't parse ProductMessage: %s\n%s\n" (BS.unpack rawMsg) err
 
 findServices :: Broker -> [DiscoverResponse]
 findServices b = do
