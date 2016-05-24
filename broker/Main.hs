@@ -174,14 +174,15 @@ runServiceThread opts ctx snk appstate port@(Port p) =
       rawMsg <- Z.receive socket
       (broker', _) <- readMVar appstate
       let serviceID = getServiceIdByPort port broker'
-      let msg = A.decodeStrict rawMsg
-      for_ msg $ \msg' -> do
-        when (length (productTopic opts) > 0) $
-          Z.send snk [Z.SendMore] $
-            BS.unwords $ TextEnc.encodeUtf8 <$> Sub.topic msg' (productTopic opts)
-        Z.send snk [] rawMsg
-        when (debug opts) $ T.putStrLn $ T.concat [toText serviceID, "/", toText $ P.product msg', "/", toText $ P.language msg', " -> broker"]
-        modifyMVar_ appstate $ onProductMessage opts msg'
+      case A.decodeStrict rawMsg of
+        Just msg -> do
+          when (length (productTopic opts) > 0) $
+            Z.send snk [Z.SendMore] $
+              BS.unwords $ TextEnc.encodeUtf8 <$> Sub.topic msg' (productTopic opts)
+          Z.send snk [] rawMsg
+          when (debug opts) $ T.putStrLn $ T.concat [toText serviceID, "/", toText $ P.product msg', "/", toText $ P.language msg', " -> broker"]
+          modifyMVar_ appstate $ onProductMessage opts msg'
+        Nothing -> putStrln "failed to parse product message"
 
 findServices :: Broker -> [DiscoverResponse]
 findServices b = do
@@ -205,7 +206,8 @@ toGraphTuples dyndeps =
 
 onDynamicDependencyRegistration :: RD.RegisterDynamicDependencies -> Socket Pub -> AppState -> IO AppState
 onDynamicDependencyRegistration msg snk (broker, socketPool) = do
-  let (sources, broker') = B.registerDynamicDependency broker (RD.source msg) (RD.serviceID msg) $ toGraphTuples $ RD.dependencies msg
+  let broker' = B.registerDynamicDependency broker (RD.source msg) (RD.serviceID msg) $ toGraphTuples $ RD.dependencies msg
+  let sources = unknownSources broker (RD.serviceID msg) (RD.dependencies msg)
   if (null sources) then
     return ()
   else do
