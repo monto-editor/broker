@@ -75,9 +75,13 @@ empty from to = Broker
 
 printBroker :: Broker -> IO()
 printBroker broker = do
+  putStrLn "Broker services:"
   print (services broker)
+  putStrLn "Broker portPool:"
   print (portPool broker)
+  putStrLn "Broker productDependencyGraph:"
   printProductDependencyGraph broker
+  putStrLn "Broker dynamicDependencyGraph:"
   printDynamicDependencyGraph broker
 
 registerRequestToService :: Port -> RegisterServiceRequest -> Service
