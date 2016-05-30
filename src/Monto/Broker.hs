@@ -9,7 +9,8 @@ module Monto.Broker
   , deregisterService
   , registerDynamicDependency
   , unknownSources
-  , printDependencyGraph
+  , printProductDependencyGraph
+  , printDynamicDependencyGraph
   , Broker(..)
   , newVersion
   , newProduct
@@ -76,7 +77,8 @@ printBroker :: Broker -> IO()
 printBroker broker = do
   print (services broker)
   print (portPool broker)
-  print (productDependencies broker)
+  printProductDependencyGraph broker
+  printDynamicDependencyGraph broker
 
 registerRequestToService :: Port -> RegisterServiceRequest -> Service
 registerRequestToService port r =
@@ -180,6 +182,10 @@ registerDynamicDependency broker source serviceID deps =
 unknownSources :: Broker -> [DD.DynamicDependency] -> [Source]
 unknownSources = undefined
 
-printDependencyGraph :: Broker -> IO ()
-printDependencyGraph broker =
+printProductDependencyGraph :: Broker -> IO ()
+printProductDependencyGraph broker =
   print (productDependencies broker)
+
+printDynamicDependencyGraph :: Broker -> IO ()
+printDynamicDependencyGraph broker =
+  print (dynamicDependencies broker)
