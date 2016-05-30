@@ -94,6 +94,8 @@ run opts ctx snk = do
   _ <- installHandler sigTERM (Catch stopExcecution) Nothing
 
   let broker = B.empty (fromPort opts) (toPort opts)
+  when (debug opts) $ B.printProductDependencyGraph broker
+  when (debug opts) $ B.printDynamicDependencyGraph broker
   appstate <- newMVar (broker, M.empty)
   sourceThread <- forkIO $ runSourceThread opts ctx appstate
   registerThread <- forkIO $ runRegisterThread opts ctx appstate
@@ -130,8 +132,8 @@ runRegisterThread opts ctx appstate =
     forever $ do
       rawMsg <- Z.receive socket
       case (A.eitherDecodeStrict rawMsg, A.eitherDecodeStrict rawMsg) of
-        (Right msg, _) -> modifyMVar_ appstate $ onRegisterMessage msg socket
-        (_, Right msg) -> modifyMVar_ appstate $ onDeregisterMessage msg socket
+        (Right msg, _) -> modifyMVar_ appstate $ onRegisterMessage opts msg socket
+        (_, Right msg) -> modifyMVar_ appstate $ onDeregisterMessage opts msg socket
         (Left r, Left d) -> do
           printf "Couldn't parse message: %s\n%s\n%s\n" (BS.unpack rawMsg) r d
           sendRegisterServiceResponse socket "failed: service did not register correctly" Nothing
@@ -214,8 +216,8 @@ onDynamicDependencyRegistration msg snk (broker, socketPool) = do
     Z.send snk [] $ convertBslToBs $ A.encode $ RQI.Require sources
   return (broker', socketPool)
 
-onRegisterMessage :: Z.Sender a => RQ.RegisterServiceRequest -> Socket a -> AppState -> IO AppState
-onRegisterMessage register regSocket (broker, socketPool) = do
+onRegisterMessage :: Z.Sender a => Options -> RQ.RegisterServiceRequest -> Socket a -> AppState -> IO AppState
+onRegisterMessage opts register regSocket (broker, socketPool) = do
   let serviceID = RQ.serviceID register
   if List.null $ B.portPool broker
   then do
@@ -231,6 +233,7 @@ onRegisterMessage register regSocket (broker, socketPool) = do
     else do
       T.putStrLn $ T.unwords ["register", toText serviceID, "->", "broker"]
       let broker' = B.registerService register broker
+      when (debug opts) $ B.printProductDependencyGraph broker'
       case M.lookup serviceID (B.services broker') of
         Just service ->
           sendRegisterServiceResponse regSocket "ok" $ Just $ B.port service
@@ -239,13 +242,14 @@ onRegisterMessage register regSocket (broker, socketPool) = do
           sendRegisterServiceResponse regSocket "failed: service did not register correctly" Nothing
       return (broker', socketPool)
 
-onDeregisterMessage :: Z.Sender a => D.DeregisterService -> Socket a -> AppState -> IO AppState
-onDeregisterMessage deregMsg socket (broker, socketPool)= do
+onDeregisterMessage :: Z.Sender a => Options -> D.DeregisterService -> Socket a -> AppState -> IO AppState
+onDeregisterMessage opts deregMsg socket (broker, socketPool)= do
   T.putStrLn $ T.unwords ["deregister", toText (D.deregisterServiceID deregMsg), "->", "broker"]
   Z.send socket [] ""
   case M.lookup (D.deregisterServiceID deregMsg) $ B.services broker of
     Just _ -> do
       let broker' = B.deregisterService (D.deregisterServiceID deregMsg) broker
+      when (debug opts) $ B.printProductDependencyGraph broker'
       return (broker', socketPool)
     Nothing -> return (broker, socketPool)
 
