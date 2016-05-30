@@ -77,9 +77,7 @@ printBroker broker = do
   print (services broker)
   putStrLn "Broker portPool:"
   print (portPool broker)
-  putStrLn "Broker productDependencyGraph:"
   printProductDependencyGraph broker
-  putStrLn "Broker dynamicDependencyGraph:"
   printDynamicDependencyGraph broker
 
 registerRequestToService :: Port -> RegisterServiceRequest -> Service
@@ -182,9 +180,11 @@ registerDynamicDependency broker source serviceID deps =
    broker { dynamicDependencies = DG.register (source, serviceID) deps (dynamicDependencies broker) }
 
 printProductDependencyGraph :: Broker -> IO ()
-printProductDependencyGraph broker =
+printProductDependencyGraph broker = do 
+  putStrLn "Broker productDependencyGraph:"
   print (productDependencies broker)
 
 printDynamicDependencyGraph :: Broker -> IO ()
-printDynamicDependencyGraph broker =
+printDynamicDependencyGraph broker = do
+  putStrLn "Broker dynamicDependencyGraph:"
   print (dynamicDependencies broker)
