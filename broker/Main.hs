@@ -22,6 +22,7 @@ import           Data.Tuple
 
 import           Monto.Broker (Broker)
 import qualified Monto.Broker as B
+import qualified Monto.ResourceManager as R
 import qualified Monto.DeregisterService as D
 import           Monto.DiscoverResponse (DiscoverResponse)
 import qualified Monto.DiscoverResponse as DiscoverResp
@@ -149,7 +150,7 @@ runDynamicDepThread opts ctx snk appstate =
       case A.eitherDecodeStrict rawMsg of
         Right msg -> do
           putStrLn $ show msg
-          modifyMVar_ appstate $ onDynamicDependencyRegistration msg snk
+          modifyMVar_ appstate $ onDynamicDependencyRegistration opts msg snk
         Left err -> printf "Couldn't parse dynamic dependency registration: %s\n%s\n" (BS.unpack rawMsg) err
 
 runDiscoverThread :: Options -> Context -> MVar AppState -> IO ()
@@ -205,15 +206,20 @@ toGraphTuples dyndeps =
       insertDynamicDependency map' dyndep' = M.insertWith (++) (toGraphNode dyndep') [toGraphEdge dyndep'] map'
   in map swap $ M.assocs $ foldl insertDynamicDependency M.empty dyndeps
 
-onDynamicDependencyRegistration :: RD.RegisterDynamicDependencies -> Socket Pub -> AppState -> IO AppState
-onDynamicDependencyRegistration msg snk (broker, socketPool) = do
+onDynamicDependencyRegistration :: Options -> RD.RegisterDynamicDependencies -> Socket Pub -> AppState -> IO AppState
+onDynamicDependencyRegistration opts msg snk (broker, socketPool) = do
   let broker' = B.registerDynamicDependency broker (RD.source msg) (RD.serviceID msg) $ toGraphTuples $ RD.dependencies msg
-  let sources = B.unknownSources broker (RD.dependencies msg)
-  if (null sources) then
+  when (debug opts) $ B.printDynamicDependencyGraph broker'
+  -- putStrLn $ unwords ["requested:", show $ (map (\oneDynDep -> DD.source oneDynDep) (RD.dependencies msg))]
+  -- putStrLn $ unwords ["present:", show $ M.keys $ R.sources $ B.resourceMgr broker]
+  -- (RD.dependencies msg) is of type [DD.DynamicDependency], but R.missingSources needs [Source]
+  let missingSources = R.missingSources (map (\oneDynDep -> DD.source oneDynDep) (RD.dependencies msg)) (B.resourceMgr broker)
+  -- putStrLn $ unwords ["missing:", show $ missingSources]
+  if (null missingSources) then
     return ()
   else do
     Z.send snk [Z.SendMore] "require"
-    Z.send snk [] $ convertBslToBs $ A.encode $ RQI.Require sources
+    Z.send snk [] $ convertBslToBs $ A.encode $ RQI.Require missingSources
   return (broker', socketPool)
 
 onRegisterMessage :: Z.Sender a => Options -> RQ.RegisterServiceRequest -> Socket a -> AppState -> IO AppState
