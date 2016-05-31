@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 module Monto.ResourceManager
-  ( ResourceManager
+  ( ResourceManager(..)
   , empty
   , isOutdated
   , updateSource
