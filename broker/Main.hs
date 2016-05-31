@@ -269,10 +269,10 @@ onProductMessage = onMessage B.newProduct
 
 onMessage :: (message -> Broker -> ([Request],Broker)) -> Options -> message -> AppState -> IO AppState
 {-# INLINE onMessage #-}
-onMessage handler opts msg (broker, socketpool) = do
+onMessage handler opts msg (broker, socketPool) = do
   let (responses,broker') = handler msg broker
-  sendRequests opts (broker, socketpool) responses
-  return (broker', socketpool)
+  sendRequests opts (broker, socketPool) responses
+  return (broker', socketPool)
 
 sendRequests :: Options -> AppState -> [Request] -> IO ()
 {-# INLINE sendRequests #-}
@@ -280,11 +280,11 @@ sendRequests opts appstate = mapM_ (sendRequest opts appstate)
 
 sendRequest :: Options -> AppState -> Request -> IO ()
 {-# INLINE sendRequest #-}
-sendRequest opts (broker, socketpool) req@Req.Request {Req.serviceID = sid} = do
+sendRequest opts (broker, socketPool) req@Req.Request {Req.serviceID = sid} = do
   let encoding = A.encode req
       maybeSocket = do
         service <- M.lookup sid (B.services broker)
-        M.lookup (B.port service) socketpool
+        M.lookup (B.port service) socketPool
   case maybeSocket of
     Just sock -> do
       Z.send' sock [] encoding
