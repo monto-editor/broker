@@ -73,9 +73,9 @@ empty from to = Broker
 
 printBroker :: Broker -> IO()
 printBroker broker = do
-  putStrLn "Broker services:"
+  putStrLn "Services:"
   print (services broker)
-  putStrLn "Broker portPool:"
+  putStrLn "Port Pool:"
   print (portPool broker)
   printProductDependencyGraph broker
   printDynamicDependencyGraph broker
@@ -181,10 +181,10 @@ registerDynamicDependency broker source serviceID deps =
 
 printProductDependencyGraph :: Broker -> IO ()
 printProductDependencyGraph broker = do 
-  putStrLn "Broker productDependencyGraph:"
+  putStrLn "Product Dependency Graph:"
   print (productDependencies broker)
 
 printDynamicDependencyGraph :: Broker -> IO ()
 printDynamicDependencyGraph broker = do
-  putStrLn "Broker dynamicDependencyGraph:"
+  putStrLn "Dynamic Dependency Graph:"
   print (dynamicDependencies broker)
