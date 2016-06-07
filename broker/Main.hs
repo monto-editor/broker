@@ -215,9 +215,14 @@ onDynamicDependencyRegistration opts msg snk (broker, socketPool) = do
   -- (RD.dependencies msg) is of type [DD.DynamicDependency], but R.missingSources needs [Source]
   let missingSources = R.missingSources (map (\oneDynDep -> DD.source oneDynDep) (RD.dependencies msg)) (B.resourceMgr broker)
   -- putStrLn $ unwords ["missing:", show $ missingSources]
-  if (null missingSources) then
+  if (null missingSources) then do
+    when (debug opts) $ putStrLn "no missingSources"
+    let newlySatisfiedRequests = B.servicesWithSatisfiedDependencies (RD.source msg) (RD.serviceID msg) broker'
+    when (debug opts) $ putStrLn $ unwords ["newlySatisfiedRequests", show newlySatisfiedRequests]
+    sendRequests opts (broker, socketPool) newlySatisfiedRequests
     return ()
   else do
+    when (debug opts) $ putStrLn $ unwords ["missingSources", show missingSources]
     Z.send snk [Z.SendMore] "require"
     Z.send snk [] $ convertBslToBs $ A.encode $ RQI.Require missingSources
   return (broker', socketPool)
