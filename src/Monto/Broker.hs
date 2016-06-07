@@ -51,7 +51,6 @@ data Broker = Broker
   , productDependencies :: DependencyGraph ServiceID (Product,Language)
   , services            :: Map ServiceID Service
   , portPool            :: [Port]
-  , serviceOnPort       :: Map Port ServiceID
   } deriving (Eq,Show)
 
 empty :: Port -> Port -> Broker
@@ -61,7 +60,6 @@ empty from to = Broker
   , productDependencies = DG.register "source" [] DG.empty
   , services = M.empty
   , portPool = [from..to]
-  , serviceOnPort = M.empty
   }
 
 printBroker :: Broker -> IO()
@@ -92,7 +90,6 @@ registerService register broker =
                { productDependencies = DG.register serviceID deps (productDependencies broker)
                , services = M.insert serviceID service (services broker)
                , portPool = restPool
-               , serviceOnPort = M.insert port serviceID (serviceOnPort broker)
                }
     [] -> error "no more ports avaialable"
 
@@ -104,7 +101,6 @@ deregisterService serviceID broker = fromMaybe broker $ do
     { services = M.delete serviceID (services broker)
     , portPool = List.insert (S.port service) (portPool broker)
     , productDependencies = DG.deregister serviceID (productDependencies broker)
-    , serviceOnPort = M.delete (S.port service) (serviceOnPort broker)
     }
 
 newVersion :: SourceMessage -> Broker -> ([Request],Broker)
