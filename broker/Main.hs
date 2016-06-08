@@ -177,13 +177,13 @@ runServiceThread opts ctx snk appstate port@(Port p) =
     printf "listen on address tcp://*:%d for service\n" p
     modifyMVar_ appstate $ \(broker, socketPool) -> return (broker, M.insert port serviceSocket socketPool)
     forever $ do        
-      rawMsg <- lift $ Z.receive serviceSocket
+      rawMsg <- Z.receive serviceSocket
       case A.decodeStrict rawMsg of
         Just (Service.ProductMessage msg) -> do
           Z.send snk [] $ convertBslToBs (A.encode (IDE.ProductMessage msg))
           when (debug opts) $ T.putStrLn $ T.concat [toText $ P.product msg, "/", toText $ P.language msg, " -> broker"]
           modifyMVar_ appstate $ onProductMessage msg
-        Just (Service.ProductMessage)
+        _ -> printf "could not parse message received from service: %s\n" (show rawMsg)
   where
     onProductMessage = onMessage B.newProduct
 
@@ -204,7 +204,7 @@ onMessage :: Foldable f => (message -> Broker -> (f Request,Broker)) -> message 
 onMessage handler msg (broker,pool) = do
   let (responses,broker') = handler msg broker
   forM_ responses $ \response -> do
-    sendToService (Req.serviceID response) (A.encode (Request response)) (broker',pool)
+    sendToService (Req.serviceID response) (A.encode (Service.Request response)) (broker',pool)
   return (broker', pool)
 
 convertBslToBs :: BSL.ByteString -> BS.ByteString
