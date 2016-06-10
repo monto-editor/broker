@@ -151,22 +151,6 @@ toGraphTuples dyndeps =
 onDynamicDependencyRegistration :: Options -> RD.RegisterDynamicDependencies -> Socket Pair -> AppState -> IO AppState
 onDynamicDependencyRegistration opts msg snk (broker, socketPool) = do
   let broker' = B.registerDynamicDependency broker (RD.source msg) (RD.serviceID msg) $ toGraphTuples $ RD.dependencies msg
-  when (debug opts) $ B.printDynamicDependencyGraph broker'
-  -- putStrLn $ unwords ["requested:", show $ (map (\oneDynDep -> DD.source oneDynDep) (RD.dependencies msg))]
-  -- putStrLn $ unwords ["present:", show $ M.keys $ R.sources $ B.resourceMgr broker]
-  -- (RD.dependencies msg) is of type [DD.DynamicDependency], but R.missingSources needs [Source]
-  let missingSources = R.missingSources (map (\oneDynDep -> DD.source oneDynDep) (RD.dependencies msg)) (B.resourceMgr broker)
-  -- putStrLn $ unwords ["missing:", show $ missingSources]
-  if (null missingSources) then do
-    when (debug opts) $ putStrLn "no missingSources"
-    let newlySatisfiedRequests = B.servicesWithSatisfiedDependencies (RD.source msg) (RD.serviceID msg) broker'
-    when (debug opts) $ putStrLn $ unwords ["newlySatisfiedRequests", show newlySatisfiedRequests]
-    sendRequests opts (broker, socketPool) newlySatisfiedRequests
-    return ()
-  else do
-    when (debug opts) $ putStrLn $ unwords ["missingSources", show missingSources]
-    Z.send snk [Z.SendMore] "require"
-    Z.send snk [] $ convertBslToBs $ A.encode $ RQI.Require missingSources
   return (broker', socketPool)
 
 onRegisterMessage :: Z.Sender a => Options -> RQ.RegisterServiceRequest -> Socket a -> AppState -> IO AppState
