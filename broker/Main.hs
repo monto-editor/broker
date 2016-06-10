@@ -21,13 +21,11 @@ import           Data.Tuple (swap)
 
 import           Monto.Broker (Broker)
 import qualified Monto.Broker as B
-import qualified Monto.ResourceManager as R
 import           Monto.ConfigurationMessage (ConfigurationMessage(..))
 import qualified Monto.DeregisterService as D
 import           Monto.DiscoverResponse (DiscoverResponse)
 import qualified Monto.DiscoverResponse as DiscoverResp
 import qualified Monto.DynamicDependency as DD
-import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 import qualified Monto.Request as Req
 import           Monto.Request (Request)
