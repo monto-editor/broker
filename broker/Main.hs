@@ -31,7 +31,6 @@ import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 import qualified Monto.Request as Req
 import           Monto.Request (Request)
-import qualified Monto.Require as RQI
 import qualified Monto.RegisterDynamicDependencies as RD
 import qualified Monto.RegisterServiceRequest as RQ
 import qualified Monto.RegisterServiceResponse as RS
