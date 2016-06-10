@@ -81,18 +81,19 @@ main = do
       let broker = B.empty (fromPort opts) (toPort opts)
 
       printf "Receive messages from IDE on %s and send to %s\n" (source opts) (sink opts)
+
       appstate <- newMVar (broker, M.empty)
-      sourceThread <- forkIO $ runSourceThread opts ctx appstate snk
+      ideThread <- forkIO $ runIDEThread opts ctx appstate snk
       registerThread <- forkIO $ runRegisterThread opts ctx appstate
       threads <- forM (B.portPool broker) $ forkIO . runServiceThread opts ctx snk appstate
 
       _ <- readMVar interrupted
       forM_ threads killThread
       killThread registerThread
-      killThread sourceThread
+      killThread ideThread
                  
-runSourceThread :: Options -> Context -> MVar AppState -> Socket Pair -> IO ()
-runSourceThread opts ctx appstate snk =
+runIDEThread :: Options -> Context -> MVar AppState -> Socket Pair -> IO ()
+runIDEThread opts ctx appstate snk =
   Z.withSocket ctx Z.Pair $ \src -> do
     Z.bind src $ source opts
     forever $ do
@@ -108,9 +109,9 @@ runSourceThread opts ctx appstate snk =
         Just (IDE.DiscoverRequest request) -> do
           when (debug opts) $ printf "discover request: %s\n" (show request)
           services <- findServices <$> getBroker appstate
-          when (debug opts) $ printf "discover response: %s\n" (show services)
+          when (debug opts) $ printf "discover response\n" -- (show services)
           Z.send snk [] $ convertBslToBs $ A.encode (IDE.DiscoverResponse services)
-        Nothing -> putStrLn "message is not a version message"
+        Nothing -> printf "Unrecongnizde message from IDE %s\n" (show rawMsg)
   where
     findServices :: Broker -> [DiscoverResponse]
     findServices b = do
@@ -147,7 +148,7 @@ toGraphTuples dyndeps =
 
 onDynamicDependencyRegistration :: Options -> RD.RegisterDynamicDependencies -> Socket Pair -> AppState -> IO AppState
 onDynamicDependencyRegistration opts msg snk (broker, socketPool) = do
-  let broker' = B.registerDynamicDependency broker (RD.source msg) (RD.serviceID msg) $ toGraphTuples $ RD.dependencies msg
+  let broker' = B.registerDynamicDependency (RD.source msg) (RD.serviceID msg) (toGraphTuples $ RD.dependencies msg) broker
   return (broker', socketPool)
 
 onRegisterMessage :: Z.Sender a => Options -> RQ.RegisterServiceRequest -> Socket a -> AppState -> IO AppState

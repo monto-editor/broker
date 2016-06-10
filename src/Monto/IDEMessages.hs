@@ -14,7 +14,7 @@ data IDEReceive = SourceMessage SourceMessage
 $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "SourceMessage" -> "source"
-                     "ConfigurationMessage" -> "configuration"
+                     "ConfigurationMessages" -> "configuration"
                      "DiscoverRequest" -> "discovery"
                      c -> c
                  } ''IDEReceive)

@@ -73,6 +73,7 @@ test-suite specs
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base,
+                       aeson,
                        bytestring,
                        QuickCheck,
                        containers,

@@ -172,8 +172,8 @@ dynamicDependencyToMessage rMgr (edges, (source, serviceID)) =
     else map (\(product, language) ->
                Req.ProductMessage <$> R.lookupProductMessage (source, serviceID, product, language) rMgr) edges
 
-registerDynamicDependency :: Broker -> Source -> ServiceID -> [DynamicDependency] -> Broker
-registerDynamicDependency broker source serviceID deps =
+registerDynamicDependency :: Source -> ServiceID -> [DynamicDependency] -> Broker -> Broker
+registerDynamicDependency source serviceID deps broker =
    broker { dynamicDependencies = DG.register (source, serviceID) deps (dynamicDependencies broker) }
 
 printProductDependencyGraph :: Broker -> IO ()

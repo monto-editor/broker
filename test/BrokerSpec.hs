@@ -5,6 +5,7 @@ import           Control.Monad.State
 import           Control.Arrow
 
 import qualified Data.Set as S
+import           Data.Aeson (toJSON)
 
 import           Debug.Trace
 
@@ -34,25 +35,25 @@ spec = do
       javaParser = "javaParser" :: ServiceID
       javaTokenizer = "javaTokenizer" :: ServiceID
       javaSource = PDEP.ProductDependency "source" "source" java
-      s1 i = S.SourceMessage i "s1" "java" "" Nothing
-      s2 i = S.SourceMessage i "s2" "java" "" Nothing
-      s3 i = S.SourceMessage i "s3" "java" "" Nothing
-      astMsg vid src = P.ProductMessage vid src javaParser ast java ""
-      typMsg vid src = P.ProductMessage vid src javaTypechecker errors java ""
-      comMsg vid src = P.ProductMessage vid src javaCodeCompletion completions java ""
-      tokMsg vid src = P.ProductMessage vid src javaTokenizer tokens java ""
+      s1 i = S.SourceMessage i "s1" "java" ""
+      s2 i = S.SourceMessage i "s2" "java" ""
+      s3 i = S.SourceMessage i "s3" "java" ""
+      astMsg vid src = P.ProductMessage vid src javaParser ast java "" (toJSON (0::Int))
+      typMsg vid src = P.ProductMessage vid src javaTypechecker errors java "" (toJSON (0::Int))
+      comMsg vid src = P.ProductMessage vid src javaCodeCompletion completions java "" (toJSON (0::Int))
+      tokMsg vid src = P.ProductMessage vid src javaTokenizer tokens java "" (toJSON (0::Int))
       v1 = VersionID 1
       newVersion' v b = first S.fromList $ B.newVersion v b
       newProduct' v b = first S.fromList $ B.newProduct v b
       python = "python" :: Language
       productA = "productA" :: Product
       productB = "productB" :: Product
-      s20 i = S.SourceMessage i "s20" "python" "" Nothing
-      s21 i = S.SourceMessage i "s21" "python" "" Nothing
+      s20 i = S.SourceMessage i "s20" "python" ""
+      s21 i = S.SourceMessage i "s21" "python" ""
       serviceA = "serviceA" :: ServiceID
       serviceB = "serviceB" :: ServiceID
       pythonSource = PDEP.ProductDependency "source" "source" python
-      productAMsg vid src = P.ProductMessage vid src serviceA productA python ""
+      productAMsg vid src = P.ProductMessage vid src serviceA productA python "" (toJSON (0::Int))
 
   context  "Static Dependencies" $ do
 
@@ -129,10 +130,7 @@ spec = do
         trace "s21" $ B.newVersion (s21 v1) `shouldBe'`
           [Request "s21" serviceA [SourceMessage (s21 v1)]]
 
-        trace "pA20 <- pA21" $ B.registerDynamicDependency
-            "s21" serviceA
-            [([(productA, python)], ("s20", serviceA))] `shouldBe'`
-          ["s20"]
+        modify $ B.registerDynamicDependency "s21" serviceA [([(productA, python)], ("s20", serviceA))]
 
         trace "s21" $ B.newVersion (s21 v1) `shouldBe'`
           []
@@ -147,8 +145,7 @@ spec = do
             typ1s2 = typMsg v1 "s2"
             typ1s3 = typMsg v1 "s3"
 
-        trace "t2 <- t3" $ B.registerDynamicDependency "s3" javaTypechecker
-          [([(errors, java)], ("s2",javaTypechecker))] `shouldBe'` ["s2"]
+        modify $ B.registerDynamicDependency "s3" javaTypechecker [([(errors, java)], ("s2",javaTypechecker))]
 
         trace "s1" $ B.newVersion (s1 v1) `shouldBe'`
           [Request "s1" javaParser [SourceMessage (s1 v1)]]
@@ -162,8 +159,7 @@ spec = do
         trace "a2" $ B.newProduct ast1s2 `shouldBe'`
           [Request "s2" javaTypechecker [ProductMessage ast1s2, SourceMessage (s2 v1)]]
 
-        trace "t1 <- t2" $ B.registerDynamicDependency "s2" javaTypechecker
-          [([(errors, java)], ("s1",javaTypechecker))] `shouldBe'` ["s1"]
+        modify $ B.registerDynamicDependency "s2" javaTypechecker [([(errors, java)], ("s1",javaTypechecker))]
 
         trace "t1" $ B.newProduct typ1s1 `shouldBe'`
           [Request "s2" javaTypechecker [ProductMessage typ1s1, ProductMessage ast1s2, SourceMessage(s2 v1)]]
