@@ -13,6 +13,7 @@ module Monto.Broker
   , Broker(..)
   , newVersion
   , newProduct
+  , servicesWithSatisfiedDependencies
   , Service(..)
   )
   where
