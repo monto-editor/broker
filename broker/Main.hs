@@ -104,8 +104,8 @@ runIDEThread opts ctx appstate snk =
           modifyMVar_ appstate $ onSourceMessage msg
         Just (IDE.ConfigurationMessages msgs) ->
           withMVar appstate $ \state ->
-            forM_ msgs $ \(ConfigurationMessage sid conf) ->
-              sendToService sid (A.encode conf) state
+            forM_ msgs $ \c@(ConfigurationMessage sid conf) ->
+              sendToService sid (A.encode (Service.ConfigurationMessage c)) state
         Just (IDE.DiscoverRequest request) -> do
           when (debug opts) $ printf "discover request: %s\n" (show request)
           services <- findServices <$> getBroker appstate
@@ -225,6 +225,7 @@ onMessage :: Foldable f => (message -> Broker -> (f Request,Broker)) -> message 
 onMessage handler msg (broker,pool) = do
   let (responses,broker') = handler msg broker
   forM_ responses $ \response -> do
+    printf "broker -> %s\n" (show (Req.serviceID response))
     sendToService (Req.serviceID response) (A.encode (Service.Request response)) (broker',pool)
   return (broker', pool)
 
