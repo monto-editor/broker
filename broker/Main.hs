@@ -109,7 +109,8 @@ runIDEThread opts ctx appstate snk =
         Just (IDE.DiscoverRequest request) -> do
           when (debug opts) $ printf "discover request: %s\n" (show request)
           services <- findServices <$> getBroker appstate
-          when (debug opts) $ printf "discover response\n" -- (show services)
+          -- when (debug opts) $ printf "discover response: %s\n" (show services)
+          when (debug opts) $ printf "sending discover response\n"
           Z.send snk [] $ convertBslToBs $ A.encode (IDE.DiscoverResponse services)
         Nothing -> printf "Unrecongnizde message from IDE %s\n" (show rawMsg)
   where
