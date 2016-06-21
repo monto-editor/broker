@@ -48,6 +48,7 @@ type AppState = (Broker, SocketPool)
 
 data Options = Options
   { debug         :: Bool
+  , debugGraphs   :: Bool
   , sink          :: Addr
   , source        :: Addr
   , registration  :: Addr
@@ -58,6 +59,7 @@ data Options = Options
 options :: Parser Options
 options = Options
   <$> switch      (long "debug"        <> help "print messages that are transmitted over the broker")
+  <*> switch      (long "debugGraphs"  <> help "print dependency graphs on change")
   <*> strOption   (long "sink"         <> help "address of the sink")
   <*> strOption   (long "source"       <> help "address of the source")
   <*> strOption   (long "registration" <> help "address for service registration")
@@ -82,6 +84,10 @@ main = do
 
       printf "Receive messages from IDE on %s and send to %s\n" (source opts) (sink opts)
 
+      when (debugGraphs opts) $ do
+        B.printProductDependencyGraph broker
+        B.printDynamicDependencyGraph broker
+
       appstate <- newMVar (broker, M.empty)
       ideThread <- forkIO $ runIDEThread opts ctx appstate snk
       registerThread <- forkIO $ runRegisterThread opts ctx appstate
@@ -91,7 +97,7 @@ main = do
       forM_ threads killThread
       killThread registerThread
       killThread ideThread
-                 
+
 runIDEThread :: Options -> Context -> MVar AppState -> Socket Pair -> IO ()
 runIDEThread opts ctx appstate snk =
   Z.withSocket ctx Z.Pair $ \src -> do
@@ -169,7 +175,7 @@ onRegisterMessage opts register regSocket (broker, socketPool) = do
     else do
       T.putStrLn $ T.unwords ["register", toText sid, "->", "broker"]
       let broker' = B.registerService register broker
-      when (debug opts) $ B.printProductDependencyGraph broker'
+      when (debugGraphs opts) $ B.printProductDependencyGraph broker'
       case M.lookup sid (B.services broker') of
         Just service ->
           sendRegisterServiceResponse regSocket "ok" $ Just $ B.port service
@@ -185,7 +191,7 @@ onDeregisterMessage opts deregMsg socket (broker, socketPool)= do
   case M.lookup (D.deregisterServiceID deregMsg) $ B.services broker of
     Just _ -> do
       let broker' = B.deregisterService (D.deregisterServiceID deregMsg) broker
-      when (debug opts) $ B.printProductDependencyGraph broker'
+      when (debugGraphs opts) $ B.printProductDependencyGraph broker'
       return (broker', socketPool)
     Nothing -> return (broker, socketPool)
 
