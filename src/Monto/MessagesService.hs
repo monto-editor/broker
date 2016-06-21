@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Monto.ServiceMessages where
+module Monto.MessagesService where
 
 import           Data.Aeson.TH
 import           Monto.Request
@@ -7,20 +7,20 @@ import           Monto.ConfigurationMessage
 import           Monto.ProductMessage
 import           Monto.RegisterDynamicDependencies
 
-data ServiceSend = Request Request
-                 | ConfigurationMessage ConfigurationMessage
+data MessageToService = Request Request
+                      | ConfigurationMessage ConfigurationMessage
 $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "Request" -> "request"
                      "ConfigurationMessage" -> "configuration"
                      c -> c
-                 } ''ServiceSend)
+                 } ''MessageToService)
 
-data ServiceReceive = ProductMessage ProductMessage
-                    | DynamicDependency RegisterDynamicDependencies
+data MessageFromService = ProductMessage ProductMessage
+                        | DynamicDependency RegisterDynamicDependencies
 $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "ProductMessage" -> "product"
                      "DynamicDependency" -> "dependency"
                      c -> c
-                 } ''ServiceReceive)
+                 } ''MessageFromService)

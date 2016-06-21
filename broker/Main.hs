@@ -34,8 +34,8 @@ import qualified Monto.RegisterServiceRequest as RQ
 import qualified Monto.RegisterServiceResponse as RS
 import           Monto.Types
 import qualified Monto.SourceMessage as S
-import qualified Monto.IDEMessages as IDE
-import qualified Monto.ServiceMessages as Service
+import qualified Monto.MessagesIDE as IDE
+import qualified Monto.MessagesService as Service
 import qualified Monto.Service as S
 
 import           Options.Applicative

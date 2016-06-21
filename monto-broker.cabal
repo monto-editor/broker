@@ -19,7 +19,8 @@ library
                        Monto.DiscoverRequest,
                        Monto.DiscoverResponse,
                        Monto.DynamicDependency,
-                       Monto.IDEMessages,
+                       Monto.MessagesIDE,
+                       Monto.MessagesService,
                        Monto.Options,
                        Monto.ProductDependency,
                        Monto.ProductMessage,
@@ -30,7 +31,6 @@ library
                        Monto.Request,
                        Monto.ResourceManager,
                        Monto.Service,
-                       Monto.ServiceMessages,
                        Monto.SourceMessage,
                        Monto.Subscription,
                        Monto.Types
