@@ -249,10 +249,10 @@ sendToService sid msg (broker,pool) = void $ runMaybeT $ do
 onMessage :: Foldable f => (message -> Broker -> (f Request,Broker)) -> message -> AppState -> IO AppState
 {-# INLINE onMessage #-}
 onMessage handler msg (broker,pool) = do
-  let (responses,broker') = handler msg broker
-  forM_ responses $ \response -> do
-    printf "broker -> %s\n" (show (Req.serviceID response))
-    sendToService (Req.serviceID response) (A.encode (Service.Request response)) (broker',pool)
+  let (requests,broker') = handler msg broker
+  forM_ requests $ \request -> do
+    printf "broker -> %s\n" (show (Req.serviceID request))
+    sendToService (Req.serviceID request) (A.encode (Service.Request request)) (broker',pool)
   return (broker', pool)
 
 convertBslToBs :: BSL.ByteString -> BS.ByteString
