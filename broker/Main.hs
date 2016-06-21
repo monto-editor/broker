@@ -112,7 +112,7 @@ runIDEThread opts ctx appstate snk =
           -- when (debug opts) $ printf "discover response: %s\n" (show services)
           when (debug opts) $ printf "sending discover response\n"
           Z.send snk [] $ convertBslToBs $ A.encode (IDE.DiscoverResponse services)
-        Nothing -> printf "Unrecongnizde message from IDE %s\n" (show rawMsg)
+        Nothing -> printf "Unrecognized message from IDE %s\n" (show rawMsg)
   where
     findServices :: Broker -> [DiscoverResponse]
     findServices b = do
