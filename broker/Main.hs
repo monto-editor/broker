@@ -104,21 +104,21 @@ runIDEThread opts ctx appstate snk =
     Z.bind src $ source opts
     forever $ do
       rawMsg <- Z.receive src
-      case (A.decodeStrict rawMsg) of
-        Just (IDE.SourceMessage msg) -> do
+      case A.eitherDecodeStrict rawMsg of
+        Right (IDE.SourceMessage msg) -> do
           when (debug opts) $ T.putStrLn $ T.unwords [toText (S.source msg),"->", "broker"]
           modifyMVar_ appstate $ onSourceMessage msg
-        Just (IDE.ConfigurationMessages msgs) ->
+        Right (IDE.ConfigurationMessages msgs) ->
           withMVar appstate $ \state ->
             forM_ msgs $ \c@(ConfigurationMessage sid conf) ->
               sendToService sid (A.encode (Service.ConfigurationMessage c)) state
-        Just (IDE.DiscoverRequest request) -> do
+        Right (IDE.DiscoverRequest request) -> do
           when (debug opts) $ printf "discover request: %s\n" (show request)
           services <- findServices <$> getBroker appstate
           -- when (debug opts) $ printf "discover response: %s\n" (show services)
           when (debug opts) $ printf "sending discover response\n"
           Z.send snk [] $ convertBslToBs $ A.encode (IDE.DiscoverResponse services)
-        Nothing -> printf "Unrecognized message from IDE %s\n" (show rawMsg)
+        Left err -> printf "Coundn't parse this message from IDE: %s\nBecause %s\n" (show rawMsg) err
   where
     findServices :: Broker -> [DiscoverResponse]
     findServices b = do
@@ -139,7 +139,7 @@ runRegisterThread opts ctx appstate =
         (Right msg, _) -> modifyMVar_ appstate $ onRegisterMessage opts msg socket
         (_, Right msg) -> modifyMVar_ appstate $ onDeregisterMessage opts msg socket
         (Left r, Left d) -> do
-          printf "Couldn't parse message: %s\n%s\n%s\n" (BS.unpack rawMsg) r d
+          printf "Couldn't parse this message: %s\nBecause %s\nBecause %s\n" (BS.unpack rawMsg) r d
           sendRegisterServiceResponse socket "failed: service did not register correctly" Nothing
 
 sendRegisterServiceResponse :: Z.Sender a => Socket a -> T.Text -> Maybe Port -> IO ()
@@ -203,15 +203,15 @@ runServiceThread opts ctx snk appstate port@(Port p) =
     modifyMVar_ appstate $ \(broker, socketPool) -> return (broker, M.insert port serviceSocket socketPool)
     forever $ do        
       rawMsg <- Z.receive serviceSocket
-      case A.decodeStrict rawMsg of
-        Just (Service.ProductMessage msg) -> do
+      case A.eitherDecodeStrict rawMsg of
+        Right (Service.ProductMessage msg) -> do
           Z.send snk [] $ convertBslToBs (A.encode (IDE.ProductMessage msg))
           when (debug opts) $ T.putStrLn $ T.concat [toText $ P.product msg, "/", toText $ P.language msg, " -> broker"]
           modifyMVar_ appstate $ onProductMessage msg
-        Just (Service.DynamicDependency msg) -> do
+        Right (Service.DynamicDependency msg) -> do
           when (debug opts) $ putStrLn $ show msg
           modifyMVar_ appstate $ onDynamicDependencyRegistration opts msg snk
-        _ -> printf "could not parse message received from service: %s\n" (show rawMsg)
+        Left err -> printf "Couldn't parse this message from service: %s\nBecause %s\n" (show rawMsg) err
   where
     onProductMessage = onMessage B.newProduct
 
