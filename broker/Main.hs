@@ -21,6 +21,7 @@ import           Data.Tuple (swap)
 
 import           Monto.Broker (Broker)
 import qualified Monto.Broker as B
+import qualified Monto.ResourceManager as R
 import           Monto.ConfigurationMessage (ConfigurationMessage(..))
 import qualified Monto.DeregisterService as D
 import           Monto.DiscoverResponse (DiscoverResponse)
@@ -156,6 +157,24 @@ toGraphTuples dyndeps =
 onDynamicDependencyRegistration :: Options -> RD.RegisterDynamicDependencies -> Socket Pair -> AppState -> IO AppState
 onDynamicDependencyRegistration opts msg snk (broker, socketPool) = do
   let broker' = B.registerDynamicDependency (RD.source msg) (RD.serviceID msg) (toGraphTuples $ RD.dependencies msg) broker
+  when (debugGraphs opts) $ B.printDynamicDependencyGraph broker'
+
+  -- (RD.dependencies msg) is of type [DD.DynamicDependency], but R.missingSources needs [Source]
+  let missingSources = R.missingSources (map (\oneDynDep -> DD.source oneDynDep) (RD.dependencies msg)) (B.resourceMgr broker)
+
+  when (debug opts) $ do
+    putStrLn $ unwords ["requested:", show $ (map (\oneDynDep -> DD.source oneDynDep) (RD.dependencies msg))]
+    putStrLn $ unwords ["present:", show $ M.keys $ R.sources $ B.resourceMgr broker]
+    putStrLn $ unwords ["missing:", show $ missingSources]
+
+  when (null missingSources) $ do
+    let newlySatisfiedRequests = B.servicesWithSatisfiedDependencies (RD.source msg) (RD.serviceID msg) broker'
+    forM_ newlySatisfiedRequests $ \newlySatisfiedRequest -> do
+      sendToService (Req.serviceID newlySatisfiedRequest) (A.encode (Service.Request newlySatisfiedRequest)) (broker',socketPool)
+
+    when (debug opts) $ do
+      putStrLn $ unwords ["newlySatisfiedRequests", show newlySatisfiedRequests]
+
   return (broker', socketPool)
 
 onRegisterMessage :: Z.Sender a => Options -> RQ.RegisterServiceRequest -> Socket a -> AppState -> IO AppState
