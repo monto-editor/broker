@@ -110,22 +110,18 @@ spec = do
                $ B.empty (Port 5010) (Port 5020)
 
     it "can track dynamic product dependencies" $
-      --
-      --     s1      s2      s3
-      --     ^       ^       ^
-      --    ast     ast     ast
-      --     ^       ^       ^
-      --   type <- type <- type
-      --
-      --
-      --    s20      s21
-      --     ^        ^
-      --   prodA <- prodA
-      --     ^        ^
-      --   prodB    prodB
-      --
       void $ flip execStateT broker $ do
 
+        trace "s20" $ B.newVersion (pythonS20 v1) `shouldBe'`
+          [Request "s20" pythonParser [SourceMessage (pythonS20 v1)]]
+
+        --
+        --    s20      s21
+        --     ^        ^
+        --    ast  <-  ast
+        --     ^        ^
+        --   codeC    codeC
+        --
         trace "s20" $ B.newVersion (pythonS20 v1) `shouldBe'`
           [Request "s20" pythonParser [SourceMessage (pythonS20 v1)]]
 
@@ -142,6 +138,13 @@ spec = do
         trace "service + prod dep test" $ B.newProduct pythonAstMsgS20 `shouldBe'`
           [Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20], Request "s21" pythonParser [ProductMessage pythonAstMsgS20, SourceMessage (pythonS21 v1)]]
 
+        --
+        --     s1      s2      s3
+        --     ^       ^       ^
+        --    ast     ast     ast
+        --     ^       ^       ^
+        --   type <- type <- type
+        --
         let ast1s1 = astMsg v1 "s1"
             ast1s2 = astMsg v1 "s2"
             ast1s3 = astMsg v1 "s3"
