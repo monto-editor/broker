@@ -25,6 +25,7 @@ spec :: Spec
 spec = do
 
   let register sid prods deps = B.registerService (RegisterServiceRequest sid "" "" Nothing prods deps)
+      -- Java
       java = "java" :: Language
       tokens = "tokens" :: Product
       ast = "ast" :: Product
@@ -35,9 +36,9 @@ spec = do
       javaParser = "javaParser" :: ServiceID
       javaTokenizer = "javaTokenizer" :: ServiceID
       javaSource = PDEP.ProductDependency "source" "source" java
-      s1 i = S.SourceMessage i "s1" java ""
-      s2 i = S.SourceMessage i "s2" java ""
-      s3 i = S.SourceMessage i "s3" java ""
+      s1 vid = S.SourceMessage vid "s1" java ""
+      s2 vid = S.SourceMessage vid "s2" java ""
+      s3 vid = S.SourceMessage vid "s3" java ""
       astMsg vid src = P.ProductMessage vid src javaParser ast java "" (toJSON (0::Int))
       typMsg vid src = P.ProductMessage vid src javaTypechecker errors java "" (toJSON (0::Int))
       comMsg vid src = P.ProductMessage vid src javaCodeCompletion completions java "" (toJSON (0::Int))
@@ -49,14 +50,14 @@ spec = do
 
       -- Python
       python = "python" :: Language
-      productA = "productA" :: Product
-      productB = "productB" :: Product
-      s20 i = S.SourceMessage i "s20" python ""
-      s21 i = S.SourceMessage i "s21" python ""
-      serviceA = "serviceA" :: ServiceID
-      serviceB = "serviceB" :: ServiceID
+      pythonAstProduct = "pythonAst" :: Product
+      pythonCompletionsProduct = "pythonCompletions" :: Product
+      pythonS20 i = S.SourceMessage i "s20" python ""
+      pythonS21 i = S.SourceMessage i "s21" python ""
+      pythonParser = "pythonParser" :: ServiceID
+      pythonCodeCompletion = "pythonCodeCompletion" :: ServiceID
       pythonSource = PDEP.ProductDependency "source" "source" python
-      productAMsg vid src = P.ProductMessage vid src serviceA productA python "" (toJSON (0::Int))
+      pythonAstMsg vid src = P.ProductMessage vid src pythonParser pythonAstProduct python "" (toJSON (0::Int))
 
   context  "Static Dependencies" $ do
 
@@ -102,8 +103,8 @@ spec = do
 
   context "Product Dependencies" $ do
 
-    let broker = register serviceB [PD.ProductDescription productB python] [PDEP.ProductDependency serviceA productA python]
-               $ register serviceA [PD.ProductDescription productA python] [pythonSource]
+    let broker = register pythonCodeCompletion [PD.ProductDescription pythonCompletionsProduct python] [PDEP.ProductDependency pythonParser pythonAstProduct python]
+               $ register pythonParser [PD.ProductDescription pythonAstProduct python] [pythonSource]
                $ register javaTypechecker [PD.ProductDescription errors java] [javaSource,PDEP.ProductDependency javaParser ast java]
                $ register javaParser [PD.ProductDescription ast java] [javaSource]
                $ B.empty (Port 5010) (Port 5020)
@@ -125,21 +126,21 @@ spec = do
       --
       void $ flip execStateT broker $ do
 
-        let serviceAs20 = productAMsg v1 "s20"
+        trace "s20" $ B.newVersion (pythonS20 v1) `shouldBe'`
+          [Request "s20" pythonParser [SourceMessage (pythonS20 v1)]]
 
-        trace "s20" $ B.newVersion (s20 v1) `shouldBe'`
-          [Request "s20" serviceA [SourceMessage (s20 v1)]]
+        trace "s21" $ B.newVersion (pythonS21 v1) `shouldBe'`
+          [Request "s21" pythonParser [SourceMessage (pythonS21 v1)]]
 
-        trace "s21" $ B.newVersion (s21 v1) `shouldBe'`
-          [Request "s21" serviceA [SourceMessage (s21 v1)]]
+        modify $ B.registerDynamicDependency "s21" pythonParser [([(pythonAstProduct, python)], ("s20", pythonParser))]
 
-        modify $ B.registerDynamicDependency "s21" serviceA [([(productA, python)], ("s20", serviceA))]
-
-        trace "s21" $ B.newVersion (s21 v1) `shouldBe'`
+        trace "s21" $ B.newVersion (pythonS21 v1) `shouldBe'`
           []
 
-        trace "service + prod dep test" $ B.newProduct serviceAs20 `shouldBe'`
-          [Request "s20" serviceB [ProductMessage serviceAs20], Request "s21" serviceA [ProductMessage serviceAs20, SourceMessage (s21 v1)]]
+        let pythonAstMsgS20 = pythonAstMsg v1 "s20"
+
+        trace "service + prod dep test" $ B.newProduct pythonAstMsgS20 `shouldBe'`
+          [Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20], Request "s21" pythonParser [ProductMessage pythonAstMsgS20, SourceMessage (pythonS21 v1)]]
 
         let ast1s1 = astMsg v1 "s1"
             ast1s2 = astMsg v1 "s2"
