@@ -35,9 +35,9 @@ spec = do
       javaParser = "javaParser" :: ServiceID
       javaTokenizer = "javaTokenizer" :: ServiceID
       javaSource = PDEP.ProductDependency "source" "source" java
-      s1 i = S.SourceMessage i "s1" "java" ""
-      s2 i = S.SourceMessage i "s2" "java" ""
-      s3 i = S.SourceMessage i "s3" "java" ""
+      s1 i = S.SourceMessage i "s1" java ""
+      s2 i = S.SourceMessage i "s2" java ""
+      s3 i = S.SourceMessage i "s3" java ""
       astMsg vid src = P.ProductMessage vid src javaParser ast java "" (toJSON (0::Int))
       typMsg vid src = P.ProductMessage vid src javaTypechecker errors java "" (toJSON (0::Int))
       comMsg vid src = P.ProductMessage vid src javaCodeCompletion completions java "" (toJSON (0::Int))
@@ -45,11 +45,14 @@ spec = do
       v1 = VersionID 1
       newVersion' v b = first S.fromList $ B.newVersion v b
       newProduct' v b = first S.fromList $ B.newProduct v b
+
+
+      -- Python
       python = "python" :: Language
       productA = "productA" :: Product
       productB = "productB" :: Product
-      s20 i = S.SourceMessage i "s20" "python" ""
-      s21 i = S.SourceMessage i "s21" "python" ""
+      s20 i = S.SourceMessage i "s20" python ""
+      s21 i = S.SourceMessage i "s21" python ""
       serviceA = "serviceA" :: ServiceID
       serviceB = "serviceB" :: ServiceID
       pythonSource = PDEP.ProductDependency "source" "source" python
