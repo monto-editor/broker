@@ -57,5 +57,5 @@ lookupSourceMessage src resourceMgr = M.lookup src (sources resourceMgr)
 lookupProductMessage :: (Source,ServiceID,Product,Language) -> ResourceManager -> Maybe ProductMessage
 lookupProductMessage k resourceMgr = M.lookup k (products resourceMgr)
 
-missingSources :: [Source] -> ResourceManager -> [Source]
-missingSources requiredSources resourceMgr = S.toList(S.fromList(requiredSources) S.\\ S.fromList((M.keys(sources resourceMgr))))
+missingSources :: [Source] -> ResourceManager -> S.Set Source
+missingSources requiredSources resourceMgr = S.fromList(requiredSources) S.\\ S.fromList((M.keys(sources resourceMgr)))
