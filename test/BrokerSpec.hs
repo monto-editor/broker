@@ -112,9 +112,6 @@ spec = do
     it "can track dynamic product dependencies" $
       void $ flip execStateT broker $ do
 
-        trace "s20" $ B.newVersion (pythonS20 v1) `shouldBe'`
-          [Request "s20" pythonParser [SourceMessage (pythonS20 v1)]]
-
         --
         --    s20      s21
         --     ^        ^
@@ -185,16 +182,6 @@ spec = do
 
         trace "t3" $ B.newProduct typ1s3 `shouldBe'`
           []
-
-    -- A
-    -- ^
-    -- B < D    D3   A1
-    -- ^   ^    ^    ^
-    -- |  /     B2   B3
-    -- C         ^    ^
-    -- ^          \  /
-    -- E           C1
-    --
 
   where
     shouldBe' actual expected = do
