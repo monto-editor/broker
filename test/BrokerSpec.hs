@@ -58,6 +58,7 @@ spec = do
       pythonCodeCompletion = "pythonCodeCompletion" :: ServiceID
       pythonSource = PDEP.ProductDependency "source" "source" python
       pythonAstMsg vid src = P.ProductMessage vid src pythonParser pythonAstProduct python "" (toJSON (0::Int))
+      pythonCodeCMsg vid src = P.ProductMessage vid src pythonCodeCompletion completions python "" (toJSON (0::Int))
 
   context  "Static Dependencies" $ do
 
@@ -123,7 +124,7 @@ spec = do
         --     |                |
         --    PRO              PRO
         --     |                |
-        --   codeC            codeC
+        --   codeC <-- DYN -- codeC
         --
         -- PRO = Product Dependency
         -- DYN = Dynamic Dependency
@@ -150,6 +151,28 @@ spec = do
           B.newProduct pythonAstMsgS20 `shouldBe'`
             [Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20], 
              Request "s21" pythonParser [ProductMessage pythonAstMsgS20, SourceMessage (pythonS21 v1)]]
+
+
+        -- Test, that directly fulfilled new dynamic dependencies get generated
+        -- First let everything arrive, but codeC of s21
+        let pythonCodeCMsg20 = pythonCodeCMsg v1 "s20"
+        let pythonAstMsgS21 = pythonAstMsg v1 "s21"
+
+        trace "Arrival of completion pm of s20 should generate no requests, because nothing depends on it" $
+          B.newProduct pythonCodeCMsg20 `shouldBe'`
+            []
+
+        trace "Arrival of ast pm of s21 should generate codeC request for s21" $
+          B.newProduct pythonAstMsgS21 `shouldBe'`
+            [Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21]]
+
+        -- completions product of s21 depends on completions product of s20 (maybe because s21 import s20)
+        modify $ B.registerDynamicDependency "s21" pythonCodeCompletion [([(pythonCompletionsProduct, python)], ("s20", pythonCodeCompletion))]
+
+        -- completions of s21 now depends on ast of s21 (via product dependency) and on completions of s20 (via dynamic dependency)
+        --trace "After registration of a dynamic dependency, that is already fulfilled, the request for it should be generated immediately" $
+        --  B.servicesWithSatisfiedDependencies "s21" pythonCodeCompletion `shouldBe'`
+        --    [Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21, ProductMessage pythonCodeCMsg20]]
 
         --
         --     s1                s2                s3
