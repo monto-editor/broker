@@ -113,34 +113,56 @@ spec = do
       void $ flip execStateT broker $ do
 
         --
-        --    s20      s21
-        --     ^        ^
-        --    ast  <-  ast
-        --     ^        ^
-        --   codeC    codeC
+        --    s20              s21
+        --     ^                ^
+        --     |                |
+        --    PRO              PRO
+        --     |                |
+        --    ast  <-- DYN --  ast
+        --     ^                ^
+        --     |                |
+        --    PRO              PRO
+        --     |                |
+        --   codeC            codeC
         --
-        trace "s20" $ B.newVersion (pythonS20 v1) `shouldBe'`
-          [Request "s20" pythonParser [SourceMessage (pythonS20 v1)]]
+        -- PRO = Product Dependency
+        -- DYN = Dynamic Dependency
+        --
+        trace "Arrival of sm of s20 should generate parser request for s20" $
+          B.newVersion (pythonS20 v1) `shouldBe'`
+            [Request "s20" pythonParser [SourceMessage (pythonS20 v1)]]
 
-        trace "s21" $ B.newVersion (pythonS21 v1) `shouldBe'`
-          [Request "s21" pythonParser [SourceMessage (pythonS21 v1)]]
+        trace "Arrival of sm of s21 should generate parser request for s21" $
+          B.newVersion (pythonS21 v1) `shouldBe'`
+            [Request "s21" pythonParser [SourceMessage (pythonS21 v1)]]
+
 
         modify $ B.registerDynamicDependency "s21" pythonParser [([(pythonAstProduct, python)], ("s20", pythonParser))]
+        -- ast of s21 now depends on ast of s20
 
-        trace "s21" $ B.newVersion (pythonS21 v1) `shouldBe'`
-          []
+        trace "Arrival of sm of s21 should generate no requests, because ast pm of s20 is also required to generate parser request for s21" $
+          B.newVersion (pythonS21 v1) `shouldBe'`
+            []
 
         let pythonAstMsgS20 = pythonAstMsg v1 "s20"
 
-        trace "service + prod dep test" $ B.newProduct pythonAstMsgS20 `shouldBe'`
-          [Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20], Request "s21" pythonParser [ProductMessage pythonAstMsgS20, SourceMessage (pythonS21 v1)]]
+        trace "Arrival of ast pm of s20 should generate parser request for s21 and codeC request for s20" $
+          B.newProduct pythonAstMsgS20 `shouldBe'`
+            [Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20], 
+             Request "s21" pythonParser [ProductMessage pythonAstMsgS20, SourceMessage (pythonS21 v1)]]
 
         --
-        --     s1      s2      s3
-        --     ^       ^       ^
-        --    ast     ast     ast
-        --     ^       ^       ^
-        --   type <- type <- type
+        --     s1                s2                s3
+        --     ^                 ^                 ^
+        --     |                 |                 |
+        --    PRO               PRO               PRO
+        --     |                 |                 |
+        --    ast               ast               ast
+        --     ^                 ^                 ^
+        --     |                 |                 |
+        --    PRO               PRO               PRO
+        --     |                 |                 |
+        --   errors <-- DYN -- errors <-- DYN -- errors
         --
         let ast1s1 = astMsg v1 "s1"
             ast1s2 = astMsg v1 "s2"
@@ -149,39 +171,52 @@ spec = do
             typ1s2 = typMsg v1 "s2"
             typ1s3 = typMsg v1 "s3"
 
+        -- errors of s3 depend on errors of s2
         modify $ B.registerDynamicDependency "s3" javaTypechecker [([(errors, java)], ("s2",javaTypechecker))]
 
-        trace "s1" $ B.newVersion (s1 v1) `shouldBe'`
-          [Request "s1" javaParser [SourceMessage (s1 v1)]]
+        trace "Arrival of sm of s1 should generate parser request for s1" $
+          B.newVersion (s1 v1) `shouldBe'`
+            [Request "s1" javaParser [SourceMessage (s1 v1)]]
 
-        trace "a1" $ B.newProduct ast1s1 `shouldBe'`
-          [Request "s1" javaTypechecker [ProductMessage ast1s1, SourceMessage (s1 v1)]]
+        trace "Arrival of ast pm of s1 should generate typechecker request for s1" $
+          B.newProduct ast1s1 `shouldBe'`
+            [Request "s1" javaTypechecker [ProductMessage ast1s1, SourceMessage (s1 v1)]]
 
-        trace "s2" $ B.newVersion (s2 v1) `shouldBe'`
-          [Request "s2" javaParser [SourceMessage (s2 v1)]]
+        trace "Arrival of sm of s2 should generate parser request for s2" $
+          B.newVersion (s2 v1) `shouldBe'`
+            [Request "s2" javaParser [SourceMessage (s2 v1)]]
 
-        trace "a2" $ B.newProduct ast1s2 `shouldBe'`
-          [Request "s2" javaTypechecker [ProductMessage ast1s2, SourceMessage (s2 v1)]]
+        trace "Arrival of ast pm of s2 should generate typechecker request for s2" $
+        -- note: there is no dyn dep on errors of s2 yet, only on erros of s3
+          B.newProduct ast1s2 `shouldBe'`
+            [Request "s2" javaTypechecker [ProductMessage ast1s2, SourceMessage (s2 v1)]]
 
+        -- errors of s2 depend on errors of s1
         modify $ B.registerDynamicDependency "s2" javaTypechecker [([(errors, java)], ("s1",javaTypechecker))]
 
-        trace "t1" $ B.newProduct typ1s1 `shouldBe'`
-          [Request "s2" javaTypechecker [ProductMessage typ1s1, ProductMessage ast1s2, SourceMessage(s2 v1)]]
+        trace "Arrival of errors pm of s1 should generate typechecker request for s2, because of dynamic dependency" $
+          B.newProduct typ1s1 `shouldBe'`
+            [Request "s2" javaTypechecker [ProductMessage typ1s1, ProductMessage ast1s2, SourceMessage(s2 v1)]]
 
-        trace "t2" $ B.newProduct typ1s2 `shouldBe'`
-          []
+        trace "Arrival of errors pm of s2 should generate no requests, because product dependencies of errors of s3 are not satiesfied" $
+          B.newProduct typ1s2 `shouldBe'`
+            []
 
-        trace "s3" $ B.newVersion (s3 v1) `shouldBe'`
-          [Request "s3" javaParser [SourceMessage (s3 v1)]]
+        trace "Arrival of sm of s3 should generate parser request for s3" $
+          B.newVersion (s3 v1) `shouldBe'`
+            [Request "s3" javaParser [SourceMessage (s3 v1)]]
 
-        trace "a3" $ B.newProduct ast1s3 `shouldBe'`
-          [Request "s3" javaTypechecker [ProductMessage typ1s2, ProductMessage ast1s3, SourceMessage (s3 v1)]]
+        trace "Arrival of ast pm of s3 should generate typechecker request for s3" $
+          B.newProduct ast1s3 `shouldBe'`
+            [Request "s3" javaTypechecker [ProductMessage typ1s2, ProductMessage ast1s3, SourceMessage (s3 v1)]]
 
-        trace "t1" $ B.newProduct typ1s1 `shouldBe'`
-          [Request "s2" javaTypechecker [ProductMessage ast1s2, ProductMessage typ1s1, SourceMessage(s2 v1)]]
+        trace "Arrival of errors pm of s1 should still generate typechecker request for s2, because of dynamic dependency" $
+          B.newProduct typ1s1 `shouldBe'`
+            [Request "s2" javaTypechecker [ProductMessage ast1s2, ProductMessage typ1s1, SourceMessage(s2 v1)]]
 
-        trace "t3" $ B.newProduct typ1s3 `shouldBe'`
-          []
+        trace "Arrival of errors pm of s3 should generate no request, because nothing depends on it" $
+          B.newProduct typ1s3 `shouldBe'`
+            []
 
   where
     shouldBe' actual expected = do
