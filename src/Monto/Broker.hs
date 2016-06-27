@@ -7,10 +7,10 @@ module Monto.Broker
   , printBroker
   , registerService
   , deregisterService
-  , registerDynamicDependency
   , printProductDependencyGraph
   , printDynamicDependencyGraph
   , Broker(..)
+  , newDynamicDependency
   , newVersion
   , newProduct
   , servicesWithSatisfiedDependencies
@@ -28,7 +28,10 @@ import           Data.Maybe
 import qualified Data.List as List
 import           Data.Map (Map)
 import qualified Data.Map as M
+import qualified Data.Set as S
+import           Data.Tuple (swap)
 
+import qualified Monto.DynamicDependency as DD
 import           Monto.Types
 import           Monto.SourceMessage (SourceMessage)
 import qualified Monto.SourceMessage as SM
@@ -36,6 +39,7 @@ import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
 import           Monto.ResourceManager (ResourceManager)
 import qualified Monto.ProductDependency as PD
+import qualified Monto.RegisterDynamicDependencies as RD
 import qualified Monto.ResourceManager as R
 import           Monto.DependencyGraph (DependencyGraph)
 import qualified Monto.DependencyGraph as DG
@@ -136,6 +140,24 @@ newProduct pr broker
         serviceID = P.serviceID pr
     in (servicesWithSatisfiedDependencies source serviceID broker', broker')
 
+newDynamicDependency :: RD.RegisterDynamicDependencies -> Broker -> (S.Set Request, Broker)
+newDynamicDependency regMsg broker =
+  let source = RD.source regMsg
+      serviceID = RD.serviceID regMsg
+      deps = toGraphTuples (RD.dependencies regMsg)
+      broker' = broker 
+        { dynamicDependencies = DG.register (source, serviceID) deps (dynamicDependencies broker)
+        }
+      newlySatisfiedDependencies = foldl (\requests dep -> S.union requests (S.fromList (servicesWithSatisfiedDependencies (DD.source dep) (DD.serviceID dep) broker'))) S.empty (RD.dependencies regMsg)
+  in (newlySatisfiedDependencies, broker')
+
+toGraphTuples :: [DD.DynamicDependency] -> [DynamicDependency]
+toGraphTuples dyndeps =
+  let toGraphNode dyndep' = (DD.source dyndep', DD.serviceID dyndep')
+      toGraphEdge dyndep' = (DD.product dyndep', DD.language dyndep')
+      insertDynamicDependency map' dyndep' = M.insertWith (++) (toGraphNode dyndep') [toGraphEdge dyndep'] map'
+  in map swap $ M.assocs $ foldl insertDynamicDependency M.empty dyndeps
+
 servicesWithSatisfiedDependencies :: Source -> ServiceID -> Broker -> [Request]
 servicesWithSatisfiedDependencies source serviceID broker =
   let reverseDeps = reverseDependenciesOf source serviceID broker :: [DynamicDependency]
@@ -171,10 +193,6 @@ dynamicDependencyToMessage rMgr (edges, (source, serviceID)) =
     then [Req.SourceMessage <$> R.lookupSourceMessage source rMgr]
     else map (\(product, language) ->
                Req.ProductMessage <$> R.lookupProductMessage (source, serviceID, product, language) rMgr) edges
-
-registerDynamicDependency :: Source -> ServiceID -> [DynamicDependency] -> Broker -> Broker
-registerDynamicDependency source serviceID deps broker =
-   broker { dynamicDependencies = DG.register (source, serviceID) deps (dynamicDependencies broker) }
 
 printProductDependencyGraph :: Broker -> IO ()
 printProductDependencyGraph broker = do 

@@ -10,11 +10,13 @@ import           Data.Aeson (toJSON)
 import           Debug.Trace
 
 import qualified Monto.Broker as B
+import qualified Monto.DynamicDependency as DD
 import qualified Monto.SourceMessage as S
 import qualified Monto.ProductMessage as P
 import qualified Monto.ProductDescription as PD
 import           Monto.ProductDependency as PDEP
 import           Monto.Types
+import qualified Monto.RegisterDynamicDependencies as RD
 import           Monto.RegisterServiceRequest
 import           Monto.Request
 
@@ -78,7 +80,7 @@ spec = do
 
         let ast1 = astMsg v1 "s1"
         newProduct' ast1 `shouldBe'` S.fromList
-           [ Request "s1" javaCodeCompletion [SourceMessage (s1 v1), ProductMessage ast1]
+               [ Request "s1" javaCodeCompletion [SourceMessage (s1 v1), ProductMessage ast1]
            , Request "s1" javaTypechecker [SourceMessage (s1 v1), ProductMessage ast1]
            ]
 
@@ -137,9 +139,9 @@ spec = do
           B.newVersion (pythonS21 v1) `shouldBe'`
             [Request "s21" pythonParser [SourceMessage (pythonS21 v1)]]
 
-
-        modify $ B.registerDynamicDependency "s21" pythonParser [([(pythonAstProduct, python)], ("s20", pythonParser))]
-        -- ast of s21 now depends on ast of s20
+        trace "Registration of dynamic dependency 'python parser service for s21 depends on ast of s20' should not generate requests" $
+          B.newDynamicDependency (RD.RegisterDynamicDependencies "s21" pythonParser [DD.DynamicDependency "s20" pythonParser pythonAstProduct python]) `shouldBe'`
+            S.empty
 
         trace "Arrival of sm of s21 should generate no requests, because ast pm of s20 is also required to generate parser request for s21" $
           B.newVersion (pythonS21 v1) `shouldBe'`
@@ -153,7 +155,7 @@ spec = do
              Request "s21" pythonParser [ProductMessage pythonAstMsgS20, SourceMessage (pythonS21 v1)]]
 
 
-        -- Test, that directly fulfilled new dynamic dependencies get generated
+        -- Test, that requests for directly fulfilled new dynamic dependencies get generated
         -- First let everything arrive, but codeC of s21
         let pythonCodeCMsg20 = pythonCodeCMsg v1 "s20"
         let pythonAstMsgS21 = pythonAstMsg v1 "s21"
@@ -166,13 +168,11 @@ spec = do
           B.newProduct pythonAstMsgS21 `shouldBe'`
             [Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21]]
 
-        -- completions product of s21 depends on completions product of s20 (maybe because s21 import s20)
-        modify $ B.registerDynamicDependency "s21" pythonCodeCompletion [([(pythonCompletionsProduct, python)], ("s20", pythonCodeCompletion))]
-
+        -- After registration of a dynamic dependency, that is already fulfilled, the request for it should be generated immediately
         -- completions of s21 now depends on ast of s21 (via product dependency) and on completions of s20 (via dynamic dependency)
-        --trace "After registration of a dynamic dependency, that is already fulfilled, the request for it should be generated immediately" $
-        --  B.servicesWithSatisfiedDependencies "s21" pythonCodeCompletion `shouldBe'`
-        --    [Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21, ProductMessage pythonCodeCMsg20]]
+        trace "Registration of dynamic dependency 'code completions service for s21 depends on completions product of s20' should not generate requests" $
+          B.newDynamicDependency (RD.RegisterDynamicDependencies "s21" pythonCodeCompletion [DD.DynamicDependency "s20" pythonCodeCompletion pythonCompletionsProduct python]) `shouldBe'`
+            S.fromList [Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21, ProductMessage pythonCodeCMsg20]]
 
         --
         --     s1                s2                s3
@@ -194,8 +194,9 @@ spec = do
             typ1s2 = typMsg v1 "s2"
             typ1s3 = typMsg v1 "s3"
 
-        -- errors of s3 depend on errors of s2
-        modify $ B.registerDynamicDependency "s3" javaTypechecker [([(errors, java)], ("s2",javaTypechecker))]
+        trace "Registration of dynamic dependency 'java typechecker service for s3 depends on errors of s2' should not generate requests" $
+          B.newDynamicDependency (RD.RegisterDynamicDependencies "s3" javaTypechecker [DD.DynamicDependency "s2" javaTypechecker errors java]) `shouldBe'`
+            S.empty
 
         trace "Arrival of sm of s1 should generate parser request for s1" $
           B.newVersion (s1 v1) `shouldBe'`
@@ -214,8 +215,9 @@ spec = do
           B.newProduct ast1s2 `shouldBe'`
             [Request "s2" javaTypechecker [ProductMessage ast1s2, SourceMessage (s2 v1)]]
 
-        -- errors of s2 depend on errors of s1
-        modify $ B.registerDynamicDependency "s2" javaTypechecker [([(errors, java)], ("s1",javaTypechecker))]
+        trace "Registration of dynamic dependency 'java typechecker service for s2 depends on errors of s1' should not generate requests" $
+          B.newDynamicDependency (RD.RegisterDynamicDependencies "s2" javaTypechecker [DD.DynamicDependency "s1" javaTypechecker errors java]) `shouldBe'`
+            S.empty
 
         trace "Arrival of errors pm of s1 should generate typechecker request for s2, because of dynamic dependency" $
           B.newProduct typ1s1 `shouldBe'`
