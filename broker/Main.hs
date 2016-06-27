@@ -111,7 +111,7 @@ runIDEThread opts ctx appstate snk =
           modifyMVar_ appstate $ onSourceMessage msg
         Right (IDE.ConfigurationMessages msgs) ->
           withMVar appstate $ \state ->
-            forM_ msgs $ \c@(ConfigurationMessage sid conf) ->
+            forM_ msgs $ \c@(ConfigurationMessage sid _) ->
               sendToService sid (A.encode (Service.ConfigurationMessage c)) state
         Right (IDE.DiscoverRequest request) -> do
           when (debug opts) $ printf "discover request: %s\n" (show request)
