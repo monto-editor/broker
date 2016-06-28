@@ -105,14 +105,15 @@ runIDEThread opts ctx appstate snk =
         Right (IDE.SourceMessage msg) -> do
           when (debug opts) $ T.putStrLn $ T.unwords [toText (S.source msg),"->", "broker"]
           modifyMVar_ appstate $ onSourceMessage msg
-        Right (IDE.ConfigurationMessages msgs) ->
+        Right (IDE.ConfigurationMessages msgs) -> do
+          --when (debug opts) $ printf "config messages: %s\n" (show msgs)
           withMVar appstate $ \state ->
             forM_ msgs $ \c@(ConfigurationMessage sid _) ->
               sendToService sid (A.encode (Service.ConfigurationMessage c)) state
         Right (IDE.DiscoverRequest request) -> do
           when (debug opts) $ printf "discover request: %s\n" (show request)
           services <- findServices <$> getBroker appstate
-          -- when (debug opts) $ printf "discover response: %s\n" (show services)
+          --when (debug opts) $ printf "discover response: %s\n" (show services)
           when (debug opts) $ printf "sending discover response\n"
           Z.send snk [] $ convertBslToBs $ A.encode (IDE.DiscoverResponse services)
         Left err -> printf "Coundn't parse this message from IDE: %s\nBecause %s\n" (show rawMsg) err
@@ -122,7 +123,7 @@ runIDEThread opts ctx appstate snk =
       (B.Service sid label description products _ configuration) <- M.elems $ B.services b
       return $ DiscoverResp.DiscoverResponse sid label description products configuration
 
-    onSourceMessage = onMessage B.newVersion
+    onSourceMessage = onMessage opts B.newVersion
 
 
 runRegisterThread :: Options -> Context -> MVar AppState -> IO ()
@@ -198,8 +199,8 @@ runServiceThread opts ctx snk appstate port@(Port p) =
           modifyMVar_ appstate $ onRegisterDynamicDependenciesMessage msg
         Left err -> printf "Couldn't parse this message from service: %s\nBecause %s\n" (show rawMsg) err
   where
-    onProductMessage = onMessage B.newProduct
-    onRegisterDynamicDependenciesMessage = onMessage B.newDynamicDependency
+    onProductMessage = onMessage opts B.newProduct
+    onRegisterDynamicDependenciesMessage = onMessage opts B.newDynamicDependency
 
 maybeT :: Monad m => Maybe a -> MaybeT m a
 maybeT = MaybeT . return
@@ -213,12 +214,12 @@ sendToService sid msg (broker,pool) = void $ runMaybeT $ do
   socket <- maybeT $ M.lookup port pool
   lift $ Z.send socket [] $ convertBslToBs msg
 
-onMessage :: Foldable f => (message -> Broker -> (f Request,Broker)) -> message -> AppState -> IO AppState
+onMessage :: Foldable f => Options -> (message -> Broker -> (f Request,Broker)) -> message -> AppState -> IO AppState
 {-# INLINE onMessage #-}
-onMessage handler msg (broker,pool) = do
+onMessage opts handler msg (broker,pool) = do
   let (requests,broker') = handler msg broker
   forM_ requests $ \request -> do
-    printf "broker -> %s\n" (toText (Req.serviceID request))
+    when (debug opts) $ printf "broker -> %s\n" (toText (Req.serviceID request))
     sendToService (Req.serviceID request) (A.encode (Service.Request request)) (broker',pool)
   return (broker', pool)
 
