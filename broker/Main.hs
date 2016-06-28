@@ -218,7 +218,7 @@ onMessage :: Foldable f => (message -> Broker -> (f Request,Broker)) -> message 
 onMessage handler msg (broker,pool) = do
   let (requests,broker') = handler msg broker
   forM_ requests $ \request -> do
-    printf "broker -> %s\n" (show (Req.serviceID request))
+    printf "broker -> %s\n" (toText (Req.serviceID request))
     sendToService (Req.serviceID request) (A.encode (Service.Request request)) (broker',pool)
   return (broker', pool)
 
