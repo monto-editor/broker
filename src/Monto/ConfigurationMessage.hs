@@ -8,8 +8,8 @@ import           Monto.Types
 
 data ConfigurationMessage =
   ConfigurationMessage
-    { serviceID      :: ServiceID
-    , configurations :: Value
+    { serviceID :: ServiceID
+    , settings  :: Value
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = \s -> case s of
