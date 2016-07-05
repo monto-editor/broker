@@ -106,6 +106,7 @@ runIDEThread opts ctx appstate snk =
           when (debug opts) $ T.putStrLn $ T.unwords [toText (S.source msg),"->", "broker"]
           modifyMVar_ appstate $ onSourceMessage msg
         Right (IDE.ConfigurationMessages msgs) -> do
+          when (debug opts) $ printf "config messages -> broker\n"
           --when (debug opts) $ printf "config messages: %s\n" (show msgs)
           withMVar appstate $ \state ->
             forM_ msgs $ \c@(ConfigurationMessage sid _) ->
