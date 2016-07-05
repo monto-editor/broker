@@ -14,7 +14,7 @@ data MessageFromIDE = SourceMessage SourceMessage
 $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "SourceMessage" -> "source"
-                     "ConfigurationMessages" -> "configuration"
+                     "ConfigurationMessages" -> "configurations"
                      "DiscoverRequest" -> "discovery"
                      c -> c
                  } ''MessageFromIDE)
