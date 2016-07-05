@@ -1,15 +1,15 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
 module Monto.Request where
 
-import Data.Aeson.TH
-import Data.Aeson
-import Data.Maybe
-
+import           Data.Aeson.TH
+import           Data.Aeson
+import           Data.Aeson.Casing (snakeCase)
+import           Data.Maybe
 import qualified Data.Set as S
 
-import Monto.Types
-import Monto.SourceMessage (SourceMessage)
-import Monto.ProductMessage (ProductMessage)
+import           Monto.Types
+import           Monto.SourceMessage (SourceMessage)
+import           Monto.ProductMessage (ProductMessage)
 
 data Message = SourceMessage SourceMessage | ProductMessage ProductMessage
   deriving (Eq,Ord,Show)
@@ -39,8 +39,6 @@ instance Eq Request where
      && S.fromList msgs1 == S.fromList msgs2
 
 $(deriveJSON (defaultOptions {
-  fieldLabelModifier = \s -> case s of
-    "serviceID" -> "service_id"
-    label -> label
+  fieldLabelModifier = snakeCase
 }) ''Request)
 

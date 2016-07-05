@@ -2,6 +2,7 @@
 module Monto.DeregisterService where
 
 import           Data.Aeson.TH
+import           Data.Aeson.Casing (snakeCase)
 
 import           Monto.Types
 
@@ -10,7 +11,5 @@ data DeregisterService =
     { deregisterServiceID   :: ServiceID
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
-  fieldLabelModifier = \s -> case s of
-    "deregisterServiceID" -> "deregister_service_id"
-    label -> label
+  fieldLabelModifier = snakeCase
 }) ''DeregisterService)

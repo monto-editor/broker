@@ -3,6 +3,7 @@
 module Monto.RegisterDynamicDependencies where
 
 import           Data.Aeson.TH
+import           Data.Aeson.Casing (snakeCase)
 import           Monto.DynamicDependency
 import           Monto.Types
 
@@ -12,7 +13,5 @@ data RegisterDynamicDependencies = RegisterDynamicDependencies
     , dependencies :: [DynamicDependency]
     } deriving (Eq,Show,Ord)
 $(deriveJSON (defaultOptions {
-  fieldLabelModifier = \s -> case s of
-    "serviceID" -> "service_id"
-    label -> label
+  fieldLabelModifier = snakeCase
 }) ''RegisterDynamicDependencies)

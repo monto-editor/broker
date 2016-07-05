@@ -4,6 +4,7 @@ module Monto.ProductMessage where
 import           Prelude hiding (id)
 import           Data.Aeson.TH
 import           Data.Aeson (Value)
+import           Data.Aeson.Casing (snakeCase)
 
 import           Monto.Types
 
@@ -18,9 +19,7 @@ data ProductMessage =
     , time         :: Value
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
-  fieldLabelModifier = \s -> case s of
-    "serviceID" -> "service_id"
-    label -> label
+  fieldLabelModifier = snakeCase
 }) ''ProductMessage)
 
 

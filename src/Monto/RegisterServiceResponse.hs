@@ -4,6 +4,7 @@ module Monto.RegisterServiceResponse where
 import           Data.Aeson.TH
 import           Data.Text (Text)
 import qualified Data.Text as T
+import           Data.Aeson.Casing (snakeCase)
 import           Monto.Types
 
 data RegisterServiceResponse =
@@ -12,9 +13,7 @@ data RegisterServiceResponse =
     , bindOnPort  :: Maybe Port
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
-  fieldLabelModifier = \s -> case s of
-    "bindOnPort" -> "bind_on_port"
-    label -> label
+  fieldLabelModifier = snakeCase
 }) ''RegisterServiceResponse)
 
 instance Show RegisterServiceResponse where

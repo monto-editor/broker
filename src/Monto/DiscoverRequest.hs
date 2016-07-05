@@ -2,6 +2,7 @@
 module Monto.DiscoverRequest where
 
 import           Data.Aeson.TH
+import           Data.Aeson.Casing (snakeCase)
 
 import           Monto.Types
 
@@ -12,9 +13,7 @@ data ServiceDiscover =
     , product   :: Maybe Product
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
-  fieldLabelModifier = \s -> case s of
-    "serviceID" -> "service_id"
-    label -> label
+  fieldLabelModifier = snakeCase
 }) ''ServiceDiscover)
 
 instance Show ServiceDiscover where
@@ -30,9 +29,7 @@ data DiscoverRequest =
     { discoverServices :: [ServiceDiscover]
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
-  fieldLabelModifier = \s -> case s of
-    "discoverServices" -> "discover_services"
-    label -> label
+  fieldLabelModifier = snakeCase
 }) ''DiscoverRequest)
 
 instance Show DiscoverRequest where
