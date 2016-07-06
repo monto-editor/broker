@@ -21,6 +21,7 @@ import qualified Data.Text.IO as T
 import           Monto.Broker (Broker)
 import qualified Monto.Broker as B
 import           Monto.ConfigurationMessage (ConfigurationMessage(..))
+import qualified Monto.CommandMessage as CM
 import qualified Monto.DeregisterService as D
 import           Monto.DiscoverResponse (DiscoverResponse)
 import qualified Monto.DiscoverResponse as DiscoverResp
@@ -117,6 +118,11 @@ runIDEThread opts ctx appstate snk =
           --when (debug opts) $ printf "discover response: %s\n" (show services)
           when (debug opts) $ printf "sending discover response\n"
           Z.send snk [] $ convertBslToBs $ A.encode (IDE.DiscoverResponse services)
+        Right (IDE.CommandMessage cmdMsg) -> do
+          when (debug opts) $ printf "command message -> broker: %s\n" (show cmdMsg)
+          withMVar appstate $ \state ->
+            sendToService (CM.serviceID cmdMsg) (A.encode (Service.CommandMessage cmdMsg)) state
+
         Left err -> printf "Coundn't parse this message from IDE: %s\nBecause %s\n" (show rawMsg) err
   where
     findServices :: Broker -> [DiscoverResponse]

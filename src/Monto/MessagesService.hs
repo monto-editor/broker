@@ -2,17 +2,20 @@
 module Monto.MessagesService where
 
 import           Data.Aeson.TH
-import           Monto.Request
 import           Monto.ConfigurationMessage
+import           Monto.CommandMessage
 import           Monto.ProductMessage
 import           Monto.RegisterDynamicDependencies
+import           Monto.Request
 
 data MessageToService = Request Request
                       | ConfigurationMessage ConfigurationMessage
+                      | CommandMessage CommandMessage
 $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "Request" -> "request"
                      "ConfigurationMessage" -> "configuration"
+                     "CommandMessage" -> "command"
                      c -> c
                  } ''MessageToService)
 
