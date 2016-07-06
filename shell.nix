@@ -2,7 +2,7 @@
 
 let env = pkgs.haskellPackages.ghcWithPackages(p: with p; [
     Cabal cabal-install zeromq4-haskell hspec QuickCheck fgl optparse-applicative
-    aeson vector hlint
+    aeson aeson-casing vector hlint
   ]);
 
 in pkgs.stdenv.mkDerivation {

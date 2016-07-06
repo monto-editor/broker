@@ -1,4 +1,4 @@
-{ mkDerivation, aeson, base, bytestring, containers, fgl, hspec
+{ mkDerivation, aeson, aeson-casing, base, bytestring, containers, fgl, hspec
 , mtl, optparse-applicative, QuickCheck, semigroups, stdenv, text
 , unix, unordered-containers, vector, zeromq4-haskell
 }:
@@ -9,7 +9,7 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    aeson base bytestring containers fgl semigroups text
+    aeson aeson-casing base bytestring containers fgl semigroups text
     unordered-containers vector
   ];
   executableHaskellDepends = [

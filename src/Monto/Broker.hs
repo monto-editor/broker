@@ -1,4 +1,3 @@
-
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
@@ -50,16 +49,13 @@ import qualified Monto.Service as S
 import           Monto.Request (Request)
 import qualified Monto.Request as Req
 
-type Edge = (Product, Language)
-type DynamicNode = (Source, ServiceID)
-type ProductNode = ServiceID
-type DynamicDependency = ([Edge], DynamicNode)
-type ProductDependency = ([Edge], ProductNode)
+type DynamicDependency = ([(Product,Language)], (Source,ServiceID))
+type ProductDependency = ([(Product,Language)], ServiceID)
 
 data Broker = Broker
   { resourceMgr         :: ResourceManager
-  , productDependencies :: DependencyGraph ProductNode [Edge]
-  , dynamicDependencies :: DependencyGraph DynamicNode [Edge]
+  , productDependencies :: DependencyGraph ServiceID          [(Product,Language)]
+  , dynamicDependencies :: DependencyGraph (Source,ServiceID) [(Product,Language)]
   , services            :: Map ServiceID Service
   , portPool            :: [Port]
   } deriving (Eq,Show)
@@ -87,7 +83,7 @@ registerRequestToService :: Port -> RegisterServiceRequest -> Service
 registerRequestToService port r =
   Service (RQ.serviceID r) (RQ.label r) (RQ.description r) (RQ.products r) port (RQ.options r)
 
-dependenciesOfService :: RegisterServiceRequest -> [([Edge], ProductNode)]
+dependenciesOfService :: RegisterServiceRequest -> [([(Product,Language)], ServiceID)]
 dependenciesOfService = fmap productDependencyToTuple . RQ.dependencies
   where
     productDependencyToTuple (PD.ProductDependency sid prod lang) = ([(prod,lang)],sid)
@@ -140,7 +136,7 @@ newProduct pr broker
         serviceID = P.serviceID pr
     in (servicesWithSatisfiedDependencies source serviceID broker', broker')
 
-newDynamicDependency :: RD.RegisterDynamicDependencies -> Broker -> (S.Set Request, Broker)
+newDynamicDependency :: RD.RegisterDynamicDependencies -> Broker -> (Maybe Request, Broker)
 newDynamicDependency regMsg broker =
   let source = RD.source regMsg
       serviceID = RD.serviceID regMsg
@@ -148,8 +144,7 @@ newDynamicDependency regMsg broker =
       broker' = broker 
         { dynamicDependencies = DG.register (source, serviceID) deps (dynamicDependencies broker)
         }
-      newlySatisfiedDependencies = foldl (\requests dep -> S.union requests (S.fromList (servicesWithSatisfiedDependencies (DD.source dep) (DD.serviceID dep) broker'))) S.empty (RD.dependencies regMsg)
-  in (newlySatisfiedDependencies, broker')
+  in (hasSatisfiedDependencies broker' (source,serviceID), broker')
 
 toGraphTuples :: [DD.DynamicDependency] -> [DynamicDependency]
 toGraphTuples dyndeps =
@@ -160,39 +155,37 @@ toGraphTuples dyndeps =
 
 servicesWithSatisfiedDependencies :: Source -> ServiceID -> Broker -> [Request]
 servicesWithSatisfiedDependencies source serviceID broker =
-  let reverseDeps = reverseDependenciesOf source serviceID broker :: [DynamicDependency]
-      depsOfReverseDeps = map (dependenciesOf broker) reverseDeps :: [(DynamicDependency, [DynamicDependency])]
-  in mapMaybe (satisfiedDependencies $ resourceMgr broker) depsOfReverseDeps
+  let reverseDeps = reverseDependenciesOf source serviceID broker
+  in mapMaybe (hasSatisfiedDependencies broker) reverseDeps
 
-reverseDependenciesOf :: Source -> ServiceID  -> Broker -> [DynamicDependency]
+reverseDependenciesOf :: Source -> ServiceID  -> Broker -> [(Source,ServiceID)]
 reverseDependenciesOf source serviceID broker =
-  let reverseProductDeps = map (productToDynamicDependency source)
-                           $ DG.lookupReverseDependencies serviceID $ productDependencies broker
-      reverseDynamicDeps = DG.lookupReverseDependencies (source, serviceID) $ dynamicDependencies broker
+  let reverseProductDeps = map (\(_,sid) -> (source,sid))
+                         $ DG.lookupReverseDependencies serviceID $ productDependencies broker
+      reverseDynamicDeps = map snd
+                         $ DG.lookupReverseDependencies (source, serviceID) $ dynamicDependencies broker
   in reverseProductDeps ++ reverseDynamicDeps
 
-dependenciesOf :: Broker -> DynamicDependency -> (DynamicDependency, [DynamicDependency])
-dependenciesOf broker (edges, (source, serviceID)) =
-  let productDeps = map (productToDynamicDependency source)
-                    $ DG.lookupDependencies serviceID $ productDependencies broker
+dependenciesOf :: Broker -> (Source,ServiceID) -> [([(Product,Language)],(Source,ServiceID))]
+dependenciesOf broker (source, serviceID) =
+  let productDeps = map (\(edge,sid) -> (edge,(source,sid)))
+                  $ DG.lookupDependencies serviceID $ productDependencies broker
       dynamicDeps = DG.lookupDependencies (source, serviceID) $ dynamicDependencies broker
-  in ((edges, (source, serviceID)), productDeps ++ dynamicDeps)
+  in productDeps ++ dynamicDeps
 
-satisfiedDependencies :: ResourceManager -> (DynamicDependency, [DynamicDependency]) -> Maybe Request
-satisfiedDependencies rMgr ((_, (source, serviceID)), dynamicDeps) =
-  case sequence $ concatMap (dynamicDependencyToMessage rMgr) dynamicDeps of
+hasSatisfiedDependencies :: Broker -> (Source,ServiceID) -> Maybe Request
+hasSatisfiedDependencies broker (source, serviceID) =
+  let dependencies = dependenciesOf broker (source, serviceID)
+  in case mapM (isSatisfied (resourceMgr broker)) dependencies of
     Nothing -> Nothing
-    Just msgs -> Just $ Req.Request source serviceID msgs
+    Just msgs -> Just $ Req.Request source serviceID $ concat msgs
 
-productToDynamicDependency :: Source -> ProductDependency -> DynamicDependency
-productToDynamicDependency source (edges, serviceID) = (edges, (source, serviceID))
-
-dynamicDependencyToMessage :: ResourceManager -> DynamicDependency -> [Maybe Req.Message]
-dynamicDependencyToMessage rMgr (edges, (source, serviceID)) =
+isSatisfied :: ResourceManager -> ([(Product,Language)],(Source,ServiceID)) -> Maybe [Req.Message]
+isSatisfied rMgr (edges, (source, serviceID)) =
   if serviceID == "source"
-    then [Req.SourceMessage <$> R.lookupSourceMessage source rMgr]
-    else map (\(product, language) ->
-               Req.ProductMessage <$> R.lookupProductMessage (source, serviceID, product, language) rMgr) edges
+    then fmap (\srcmsg -> [Req.SourceMessage srcmsg]) (R.lookupSourceMessage source rMgr)
+    else mapM (\(product, language) ->
+      Req.ProductMessage <$> R.lookupProductMessage (source, serviceID, product, language) rMgr) edges
 
 printProductDependencyGraph :: Broker -> IO ()
 printProductDependencyGraph broker = do 
