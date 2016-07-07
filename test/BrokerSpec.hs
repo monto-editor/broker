@@ -141,7 +141,7 @@ spec = do
 
         trace "Registration of dynamic dependency 'python parser service for s21 depends on ast of s20' should not generate requests" $
           B.newDynamicDependency (RD.RegisterDynamicDependencies "s21" pythonParser [DD.DynamicDependency "s20" pythonParser pythonAstProduct python]) `shouldBe'`
-            S.empty
+            Nothing
 
         trace "Arrival of sm of s21 should generate no requests, because ast pm of s20 is also required to generate parser request for s21" $
           B.newVersion (pythonS21 v1) `shouldBe'`
@@ -172,7 +172,7 @@ spec = do
         -- completions of s21 now depends on ast of s21 (via product dependency) and on completions of s20 (via dynamic dependency)
         trace "Registration of dynamic dependency 'code completions service for s21 depends on completions product of s20' should not generate requests" $
           B.newDynamicDependency (RD.RegisterDynamicDependencies "s21" pythonCodeCompletion [DD.DynamicDependency "s20" pythonCodeCompletion pythonCompletionsProduct python]) `shouldBe'`
-            S.fromList [Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21, ProductMessage pythonCodeCMsg20]]
+            Just (Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21, ProductMessage pythonCodeCMsg20])
 
         --
         --     s1                s2                s3
@@ -196,7 +196,7 @@ spec = do
 
         trace "Registration of dynamic dependency 'java typechecker service for s3 depends on errors of s2' should not generate requests" $
           B.newDynamicDependency (RD.RegisterDynamicDependencies "s3" javaTypechecker [DD.DynamicDependency "s2" javaTypechecker errors java]) `shouldBe'`
-            S.empty
+            Nothing
 
         trace "Arrival of sm of s1 should generate parser request for s1" $
           B.newVersion (s1 v1) `shouldBe'`
@@ -217,7 +217,7 @@ spec = do
 
         trace "Registration of dynamic dependency 'java typechecker service for s2 depends on errors of s1' should not generate requests" $
           B.newDynamicDependency (RD.RegisterDynamicDependencies "s2" javaTypechecker [DD.DynamicDependency "s1" javaTypechecker errors java]) `shouldBe'`
-            S.empty
+            Nothing
 
         trace "Arrival of errors pm of s1 should generate typechecker request for s2, because of dynamic dependency" $
           B.newProduct typ1s1 `shouldBe'`
