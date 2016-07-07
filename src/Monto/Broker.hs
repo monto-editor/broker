@@ -67,15 +67,6 @@ empty from to = Broker
   , portPool = [from..to]
   }
 
-printBroker :: Broker -> IO()
-printBroker broker = do
-  putStrLn "Services:"
-  print (services broker)
-  putStrLn "Port Pool:"
-  print (portPool broker)
-  printProductDependencyGraph broker
-  printDynamicDependencyGraph broker
-
 registerRequestToService :: Port -> RegisterServiceRequest -> Service
 registerRequestToService port r =
   Service (RQ.serviceID r) (RQ.label r) (RQ.description r) (RQ.products r) port (RQ.options r)
@@ -174,6 +165,15 @@ reverseDependenciesOf source serviceID broker =
                          $ DG.lookupReverseDependencies (source, serviceID) $ dynamicDependencies broker
   in reverseProductDeps ++ reverseDynamicDeps
 
+-- Returns Just Request for the given node, when all dependencies of the node are fulfilled,
+-- otherwise Nothing.
+hasSatisfiedDependencies :: Broker -> (Source,ServiceID) -> Maybe Request
+hasSatisfiedDependencies broker (source, serviceID) =
+  let dependencies = dependenciesOf broker (source, serviceID)
+  in case mapM (isSatisfied (resourceMgr broker)) dependencies of
+    Nothing -> Nothing
+    Just msgs -> Just $ Req.Request source serviceID $ concat msgs
+
 -- |Finds all dependencies of the given node :: (Source,ServiceID). One dependency is represented by the dependent node :: (Source,ServiceID)
 -- and the edge which creates the dependency :: [(Product,Language)].
 -- In the static DG only the serviceID is used the find dependencies.
@@ -184,21 +184,22 @@ dependenciesOf broker (source, serviceID) =
       dynamicDeps = DG.lookupDependencies (source, serviceID) $ dynamicDependencies broker
   in productDeps ++ dynamicDeps
 
--- Returns Just Request for the given node, when all dependencies of the node are fulfilled,
--- otherwise Nothing.
-hasSatisfiedDependencies :: Broker -> (Source,ServiceID) -> Maybe Request
-hasSatisfiedDependencies broker (source, serviceID) =
-  let dependencies = dependenciesOf broker (source, serviceID)
-  in case mapM (isSatisfied (resourceMgr broker)) dependencies of
-    Nothing -> Nothing
-    Just msgs -> Just $ Req.Request source serviceID $ concat msgs
-
 isSatisfied :: ResourceManager -> ([(Product,Language)],(Source,ServiceID)) -> Maybe [Req.Message]
 isSatisfied rMgr (edges, (source, serviceID)) =
   if serviceID == "source"
     then fmap (\srcmsg -> [Req.SourceMessage srcmsg]) (R.lookupSourceMessage source rMgr)
     else mapM (\(product, language) ->
       Req.ProductMessage <$> R.lookupProductMessage (source, serviceID, product, language) rMgr) edges
+
+
+printBroker :: Broker -> IO()
+printBroker broker = do
+  putStrLn "Services:"
+  print (services broker)
+  putStrLn "Port Pool:"
+  print (portPool broker)
+  printProductDependencyGraph broker
+  printDynamicDependencyGraph broker
 
 printProductDependencyGraph :: Broker -> IO ()
 printProductDependencyGraph broker = do 
