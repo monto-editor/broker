@@ -27,7 +27,6 @@ import           Data.Maybe
 import qualified Data.List as List
 import           Data.Map (Map)
 import qualified Data.Map as M
-import qualified Data.Set as S
 import           Data.Tuple (swap)
 
 import qualified Monto.DynamicDependency as DD
@@ -49,11 +48,9 @@ import qualified Monto.Service as S
 import           Monto.Request (Request)
 import qualified Monto.Request as Req
 
-type DynamicDependency = ([(Product,Language)], (Source,ServiceID))
-type ProductDependency = ([(Product,Language)], ServiceID)
-
 data Broker = Broker
   { resourceMgr         :: ResourceManager
+  --                                       node type          edge type
   , productDependencies :: DependencyGraph ServiceID          [(Product,Language)]
   , dynamicDependencies :: DependencyGraph (Source,ServiceID) [(Product,Language)]
   , services            :: Map ServiceID Service
@@ -146,18 +143,29 @@ newDynamicDependency regMsg broker =
         }
   in (hasSatisfiedDependencies broker' (source,serviceID), broker')
 
-toGraphTuples :: [DD.DynamicDependency] -> [DynamicDependency]
+-- |Takes dynamic dependecies from JSON and converts them to a list of tuples, that can be used for insertion in dynamic dependency graph
+-- One tuple includes one node and one edge in the dynamic dependency graph.
+toGraphTuples :: [DD.DynamicDependency] -> [([(Product,Language)], (Source,ServiceID))]
 toGraphTuples dyndeps =
   let toGraphNode dyndep' = (DD.source dyndep', DD.serviceID dyndep')
       toGraphEdge dyndep' = (DD.product dyndep', DD.language dyndep')
       insertDynamicDependency map' dyndep' = M.insertWith (++) (toGraphNode dyndep') [toGraphEdge dyndep'] map'
   in map swap $ M.assocs $ foldl insertDynamicDependency M.empty dyndeps
 
+-- |Creates requests for those registered services, whose static and dynamic dependencies are fulfilled. 
+-- One node in each the static and dynamic DG, is used as starting point to find satisfied services.
+-- The starting point in the static DG is the given source. The srarting point in the dynamic DG is the tuple of the given source and serviceID.
+-- For all other nodes in teh DG, that depend on these two starting point nodes, it is checked if also all other dependencies are fulfilled.
+-- If that is the case a request for this service gets created.
 servicesWithSatisfiedDependencies :: Source -> ServiceID -> Broker -> [Request]
 servicesWithSatisfiedDependencies source serviceID broker =
   let reverseDeps = reverseDependenciesOf source serviceID broker
   in mapMaybe (hasSatisfiedDependencies broker) reverseDeps
 
+-- |Finds nodes in the static and dynamic DG, which depend on the given source and serviceID.
+-- In the static DG only the serviceID is used the find dependencies.
+-- Found dependencies in the static DG :: ServiceID get paired with the given source, 
+-- so that they can be put in one list with found dependencies of the dynamic DG :: (Source, ServiceID).
 reverseDependenciesOf :: Source -> ServiceID  -> Broker -> [(Source,ServiceID)]
 reverseDependenciesOf source serviceID broker =
   let reverseProductDeps = map (\(_,sid) -> (source,sid))
@@ -166,6 +174,9 @@ reverseDependenciesOf source serviceID broker =
                          $ DG.lookupReverseDependencies (source, serviceID) $ dynamicDependencies broker
   in reverseProductDeps ++ reverseDynamicDeps
 
+-- |Finds all dependencies of the given node :: (Source,ServiceID). One dependency is represented by the dependent node :: (Source,ServiceID)
+-- and the edge which creates the dependency :: [(Product,Language)].
+-- In the static DG only the serviceID is used the find dependencies.
 dependenciesOf :: Broker -> (Source,ServiceID) -> [([(Product,Language)],(Source,ServiceID))]
 dependenciesOf broker (source, serviceID) =
   let productDeps = map (\(edge,sid) -> (edge,(source,sid)))
@@ -173,6 +184,8 @@ dependenciesOf broker (source, serviceID) =
       dynamicDeps = DG.lookupDependencies (source, serviceID) $ dynamicDependencies broker
   in productDeps ++ dynamicDeps
 
+-- Returns Just Request for the given node, when all dependencies of the node are fulfilled,
+-- otherwise Nothing.
 hasSatisfiedDependencies :: Broker -> (Source,ServiceID) -> Maybe Request
 hasSatisfiedDependencies broker (source, serviceID) =
   let dependencies = dependenciesOf broker (source, serviceID)
