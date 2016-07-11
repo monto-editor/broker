@@ -31,10 +31,12 @@ spec = do
       ast = "ast" :: Product
       completions = "completions" :: Product
       errors = "errors" :: Product
+      sourceProduct = "source" :: Product
       javaTypechecker = "javaTypechecker" :: ServiceID
       javaCodeCompletion = "javaCodeCompletion" :: ServiceID
       javaParser = "javaParser" :: ServiceID
       javaTokenizer = "javaTokenizer" :: ServiceID
+      sourceService = "source" :: ServiceID
       javaSource = PDEP.ProductDependency "source" "source" java
       s1 vid = S.SourceMessage vid "s1" java ""
       s2 vid = S.SourceMessage vid "s2" java ""
@@ -59,8 +61,9 @@ spec = do
       pythonSource = PDEP.ProductDependency "source" "source" python
       pythonAstMsg vid src = P.ProductMessage vid src pythonParser pythonAstProduct python "" (toJSON (0::Int))
       pythonCodeCMsg vid src = P.ProductMessage vid src pythonCodeCompletion completions python "" (toJSON (0::Int))
+      pythonSourceMsg vid src = S.SourceMessage vid src python ""
 
-  context  "Static Dependencies" $ do
+  context "Product dependencies" $ do
 
     let broker = register javaCodeCompletion [PD.ProductDescription completions java] [javaSource, ProductDependency javaParser ast java]
                $ register javaTypechecker [PD.ProductDescription errors java] [javaSource, ProductDependency javaParser ast java]
@@ -101,16 +104,46 @@ spec = do
 
       return ()
 
+  context "Dynamic dependencies" $ do
 
-  context "Product Dependencies" $ do
+    it "can handle product and dynamic dependencies at once" $ do
+      undefined
 
-    let broker = register pythonCodeCompletion [PD.ProductDescription pythonCompletionsProduct python] [PDEP.ProductDependency pythonParser pythonAstProduct python]
-               $ register pythonParser [PD.ProductDescription pythonAstProduct python] [pythonSource]
-               $ register javaTypechecker [PD.ProductDescription errors java] [javaSource,PDEP.ProductDependency javaParser ast java]
-               $ register javaParser [PD.ProductDescription ast java] [javaSource]
-               $ B.empty (Port 5010) (Port 5020)
+    it "can creates requests for dynamic dependencies only if they have arrived" $ do
+      undefined
 
-    it "can track dynamic product dependencies" $
+    it "creates requests for new dynamic dependencies instantly, if they are already fulfilled" $ do
+      let broker = register pythonCodeCompletion [PD.ProductDescription pythonCompletionsProduct python] []
+                   $ B.empty (Port 5010) (Port 5020)
+      void $ flip execStateT broker $ do
+
+        -- Arrival of sm of s20 should generate no codeCompletion requests
+        B.newVersion (pythonS20 v1) `shouldBe'`
+          []
+
+        -- Registration of dynamic dependency 'code completions service for s20 depends on source of s20' should immediately generate request
+        B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
+          Just (Request "s20" pythonCodeCompletion [SourceMessage (pythonSourceMsg v1 "s20")])
+
+    it "can handle services of two different languages" $ do
+      let broker = register pythonParser [PD.ProductDescription pythonAstProduct python] [pythonSource]
+                 $ register javaParser [PD.ProductDescription ast java] [javaSource]
+                 $ B.empty (Port 5010) (Port 5020)
+      void $ flip execStateT broker $ do
+        -- Arrival of sm of python s20 should only generate request for python parser for s20
+        B.newVersion (pythonS20 v1) `shouldBe'`
+          [Request "s20" pythonParser [SourceMessage (pythonS20 v1)]]
+
+        -- Arrival of sm of java s1 should only generate request for java for s1
+        B.newVersion (s1 v1) `shouldBe'`
+          [Request "s1" javaParser [SourceMessage (s1 v1)]]
+
+    it "can track complex dynamic product dependencies" $ do
+      let broker = register pythonCodeCompletion [PD.ProductDescription pythonCompletionsProduct python] [PDEP.ProductDependency pythonParser pythonAstProduct python]
+                 $ register pythonParser [PD.ProductDescription pythonAstProduct python] [pythonSource]
+                 $ register javaTypechecker [PD.ProductDescription errors java] [javaSource,PDEP.ProductDependency javaParser ast java]
+                 $ register javaParser [PD.ProductDescription ast java] [javaSource]
+                 $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
 
         --
@@ -211,7 +244,7 @@ spec = do
           [Request "s2" javaParser [SourceMessage (s2 v1)]]
 
         --  Arrival of ast pm of s2 should generate typechecker request for s2
-        -- note: there is no dyn dep on errors of s2 yet, only on erros of s3
+        -- note: there is no dyn dep on errors of s2 yet, only on errors of s3
         B.newProduct ast1s2 `shouldBe'`
           [Request "s2" javaTypechecker [ProductMessage ast1s2, SourceMessage (s2 v1)]]
 
