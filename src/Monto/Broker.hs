@@ -109,8 +109,9 @@ newVersion srcMsg broker =
         { resourceMgr = R.updateSource srcMsg $ resourceMgr broker
         }
       source = SM.source srcMsg
+      language = SM.language srcMsg
       serviceID = "source"
-  in (servicesWithSatisfiedDependencies source serviceID broker', broker')
+  in (servicesWithSatisfiedDependencies ("source",language) (source,serviceID) broker', broker')
 
 newProduct :: ProductMessage -> Broker -> ([Request],Broker)
 {-# INLINE newProduct #-}
@@ -121,8 +122,10 @@ newProduct pr broker
           { resourceMgr = R.updateProduct pr $ resourceMgr broker
           }
         source = P.source pr
+        language = P.language pr
+        product = P.product pr
         serviceID = P.serviceID pr
-    in (servicesWithSatisfiedDependencies source serviceID broker', broker')
+    in (servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker', broker')
 
 newDynamicDependency :: RD.RegisterDynamicDependencies -> Broker -> (Maybe Request, Broker)
 newDynamicDependency regMsg broker =
@@ -148,22 +151,21 @@ toGraphTuples dyndeps =
 -- The starting point in the static DG is the given source. The srarting point in the dynamic DG is the tuple of the given source and serviceID.
 -- For all other nodes in teh DG, that depend on these two starting point nodes, it is checked if also all other dependencies are fulfilled.
 -- If that is the case a request for this service gets created.
-servicesWithSatisfiedDependencies :: Source -> ServiceID -> Broker -> [Request]
-servicesWithSatisfiedDependencies source serviceID broker =
-  let reverseDeps = reverseDependenciesOf source serviceID broker
+servicesWithSatisfiedDependencies :: (Product,Language) -> (Source,ServiceID) -> Broker -> [Request]
+servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker =
+  let reverseDeps = reverseDependenciesOf (product,language) (source,serviceID) broker
   in mapMaybe (hasSatisfiedDependencies broker) reverseDeps
 
 -- |Finds nodes in the static and dynamic DG, which depend on the given source and serviceID.
 -- In the static DG only the serviceID is used the find dependencies.
 -- Found dependencies in the static DG :: ServiceID get paired with the given source, 
 -- so that they can be put in one list with found dependencies of the dynamic DG :: (Source, ServiceID).
-reverseDependenciesOf :: Source -> ServiceID  -> Broker -> [(Source,ServiceID)]
-reverseDependenciesOf source serviceID broker =
-  let reverseProductDeps = map (\(_,sid) -> (source,sid))
+reverseDependenciesOf :: (Product,Language) -> (Source,ServiceID) -> Broker -> [(Source,ServiceID)]
+reverseDependenciesOf (product,language) (source,serviceID) broker =
+  let reverseProductDeps = map (\(edges,sid) -> (edges,(source,sid)))
                          $ DG.lookupReverseDependencies serviceID $ productDependencies broker
-      reverseDynamicDeps = map snd
-                         $ DG.lookupReverseDependencies (source, serviceID) $ dynamicDependencies broker
-  in reverseProductDeps ++ reverseDynamicDeps
+      reverseDynamicDeps = DG.lookupReverseDependencies (source, serviceID) $ dynamicDependencies broker
+  in map snd $ filter (\(edges,_) -> (product,language) `elem` edges) (reverseProductDeps ++ reverseDynamicDeps)
 
 -- Returns Just Request for the given node, when all dependencies of the node are fulfilled,
 -- otherwise Nothing.
