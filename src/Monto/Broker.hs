@@ -148,20 +148,22 @@ newDynamicDependency regMsg broker =
         }
   in (hasSatisfiedDependencies broker' (source,serviceID), broker')
 
--- |Creates requests for those registered services, whose static and dynamic dependencies are fulfilled. 
--- One node in each the static and dynamic DG, is used as starting point to find satisfied services.
--- The starting point in the static DG is the given source. The srarting point in the dynamic DG is the tuple of the given source and serviceID.
--- For all other nodes in teh DG, that depend on these two starting point nodes, it is checked if also all other dependencies are fulfilled.
--- If that is the case a request for this service gets created.
+-- |Creates requests for those registered services, whose product and dynamic dependencies are fulfilled.
+-- The given (Product,Language) tuple indicated, which product in which language just became available.
+-- The given (Source,ServiceID) tuple is used as a starting node in two dependency graphs.
+-- The starting point in the product DG is the given serviceID. The starting point in the dynamic DG is the given (source,serviceID).
+-- For all other nodes in the two DGs, that depend on these two starting point nodes,
+-- it is checked if also all other dependencies are fulfilled. If that is the case a request for this service gets created.
 servicesWithSatisfiedDependencies :: (Product,Language) -> (Source,ServiceID) -> Broker -> [Request]
 servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker =
   let reverseDeps = reverseDependenciesOf (product,language) (source,serviceID) broker
   in mapMaybe (hasSatisfiedDependencies broker) reverseDeps
 
--- |Finds nodes in the static and dynamic DG, which depend on the given source and serviceID.
--- In the static DG only the serviceID is used the find dependencies.
--- Found dependencies in the static DG :: ServiceID get paired with the given source, 
+-- |Finds nodes in the product and dynamic DG, which depend on the given source and serviceID.
+-- In the product DG only the serviceID is used the find dependencies.
+-- Found dependencies in the product DG :: ServiceID get paired with the given source, 
 -- so that they can be put in one list with found dependencies of the dynamic DG :: (Source, ServiceID).
+-- The found nodes are additionally filtered, so that they must have an adjacent edge with the given (Product,Language) tuple.
 reverseDependenciesOf :: (Product,Language) -> (Source,ServiceID) -> Broker -> [(Source,ServiceID)]
 reverseDependenciesOf (product,language) (source,serviceID) broker =
   let reverseProductDeps = map (\(edges,sid) -> (edges,(source,sid)))
@@ -180,7 +182,7 @@ hasSatisfiedDependencies broker (source, serviceID) =
 
 -- |Finds all dependencies of the given node :: (Source,ServiceID). One dependency is represented by the dependent node :: (Source,ServiceID)
 -- and the edge which creates the dependency :: [(Product,Language)].
--- In the static DG only the serviceID is used the find dependencies.
+-- In the product DG only the serviceID is used the find dependencies.
 dependenciesOf :: Broker -> (Source,ServiceID) -> [([(Product,Language)],(Source,ServiceID))]
 dependenciesOf broker (source, serviceID) =
   let productDeps = map (\(edge,sid) -> (edge,(source,sid)))
@@ -188,6 +190,8 @@ dependenciesOf broker (source, serviceID) =
       dynamicDeps = DG.lookupDependencies (source, serviceID) $ dynamicDependencies broker
   in productDeps ++ dynamicDeps
 
+-- |Retrieves given dependencies for the requirements field of Request, but only if they are cached in the ResourceManager.
+-- ProductMessages as well as SourceMessages are retrieved.
 isSatisfied :: ResourceManager -> ([(Product,Language)],(Source,ServiceID)) -> Maybe [Req.Message]
 isSatisfied rMgr (edges, (source, serviceID)) =
   if serviceID == "source"
