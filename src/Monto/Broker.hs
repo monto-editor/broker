@@ -67,15 +67,26 @@ empty from to = Broker
   , portPool = [from..to]
   }
 
-registerRequestToService :: Port -> RegisterServiceRequest -> Service
-registerRequestToService port r =
-  Service (RQ.serviceID r) (RQ.label r) (RQ.description r) (RQ.products r) port (RQ.options r)
-
-dependenciesOfService :: RegisterServiceRequest -> [([(Product,Language)], ServiceID)]
-dependenciesOfService = fmap productDependencyToTuple . RQ.dependencies
+-- |Creates one product depencency graph node and edge for each given ProductDependency originating from a JSON.
+-- These nodes and edges can be used for insertion into the product dependency graph.
+toProductDependencyGraphTuples :: [PD.ProductDependency] -> [([(Product,Language)], ServiceID)]
+toProductDependencyGraphTuples aesonDeps = fmap productDependencyToTuple aesonDeps
   where
     productDependencyToTuple (PD.ProductDependency sid prod lang) = ([(prod,lang)],sid)
     productDependencyToTuple (PD.SourceDependency lang) = ([("source",lang)],"source")
+
+-- |Creates one dynamic dependency graph node and edge for each given DynamicDependency originating from a JSON.
+-- These nodes and edges can be used for insertion into the dynamic dependency graph.
+toDynamicDependencyGraphTuples :: [DD.DynamicDependency] -> [([(Product,Language)], (Source,ServiceID))]
+toDynamicDependencyGraphTuples aesonDeps = fmap swap $ M.assocs $ foldl insertDynamicDependency M.empty aesonDeps
+  where
+    toGraphNode dyndep' = (DD.source dyndep', DD.serviceID dyndep')
+    toGraphEdge dyndep' = (DD.product dyndep', DD.language dyndep')
+    insertDynamicDependency map' dyndep' = M.insertWith (++) (toGraphNode dyndep') [toGraphEdge dyndep'] map'
+
+registerRequestToService :: Port -> RegisterServiceRequest -> Service
+registerRequestToService port r =
+  Service (RQ.serviceID r) (RQ.label r) (RQ.description r) (RQ.products r) port (RQ.options r)
 
 registerService :: RegisterServiceRequest -> Broker -> Broker
 {-# INLINE registerService #-}
@@ -84,7 +95,7 @@ registerService register broker =
     (port:restPool) ->
         let serviceID = RQ.serviceID register
             service = registerRequestToService port register
-            deps = dependenciesOfService register
+            deps = toProductDependencyGraphTuples $ RQ.dependencies register
         in broker
                { productDependencies = DG.register serviceID deps (productDependencies broker)
                , services = M.insert serviceID service (services broker)
@@ -131,20 +142,11 @@ newDynamicDependency :: RD.RegisterDynamicDependencies -> Broker -> (Maybe Reque
 newDynamicDependency regMsg broker =
   let source = RD.source regMsg
       serviceID = RD.serviceID regMsg
-      deps = toGraphTuples (RD.dependencies regMsg)
+      deps = toDynamicDependencyGraphTuples (RD.dependencies regMsg)
       broker' = broker 
         { dynamicDependencies = DG.register (source, serviceID) deps (dynamicDependencies broker)
         }
   in (hasSatisfiedDependencies broker' (source,serviceID), broker')
-
--- |Takes dynamic dependecies from JSON and converts them to a list of tuples, that can be used for insertion in dynamic dependency graph
--- One tuple includes one node and one edge in the dynamic dependency graph.
-toGraphTuples :: [DD.DynamicDependency] -> [([(Product,Language)], (Source,ServiceID))]
-toGraphTuples dyndeps =
-  let toGraphNode dyndep' = (DD.source dyndep', DD.serviceID dyndep')
-      toGraphEdge dyndep' = (DD.product dyndep', DD.language dyndep')
-      insertDynamicDependency map' dyndep' = M.insertWith (++) (toGraphNode dyndep') [toGraphEdge dyndep'] map'
-  in map swap $ M.assocs $ foldl insertDynamicDependency M.empty dyndeps
 
 -- |Creates requests for those registered services, whose static and dynamic dependencies are fulfilled. 
 -- One node in each the static and dynamic DG, is used as starting point to find satisfied services.
