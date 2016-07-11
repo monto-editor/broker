@@ -74,9 +74,9 @@ main = do
     Z.withSocket ctx Z.Pair $ \snk -> do
       Z.bind snk $ sink opts
       interrupted <- newEmptyMVar
-      let stopExcecution = putMVar interrupted Interrupted
-      _ <- installHandler sigINT  (Catch stopExcecution) Nothing
-      _ <- installHandler sigTERM (Catch stopExcecution) Nothing
+      let stopExecution = putMVar interrupted Interrupted
+      _ <- installHandler sigINT  (Catch stopExecution) Nothing
+      _ <- installHandler sigTERM (Catch stopExecution) Nothing
 
       let broker = B.empty (fromPort opts) (toPort opts)
 
@@ -123,7 +123,7 @@ runIDEThread opts ctx appstate snk =
           withMVar appstate $ \state ->
             sendToService (CM.serviceID cmdMsg) (A.encode (Service.CommandMessage cmdMsg)) state
 
-        Left err -> printf "Coundn't parse this message from IDE: %s\nBecause %s\n" (show rawMsg) err
+        Left err -> printf "Couldn't parse this message from IDE: %s\nBecause %s\n" (show rawMsg) err
   where
     findServices :: Broker -> [DiscoverResponse]
     findServices b = do

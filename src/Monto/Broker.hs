@@ -67,7 +67,7 @@ empty from to = Broker
   , portPool = [from..to]
   }
 
--- |Creates one product depencency graph node and edge for each given ProductDependency originating from a JSON.
+-- |Creates one product dependency graph node and edge for each given ProductDependency originating from a JSON.
 -- These nodes and edges can be used for insertion into the product dependency graph.
 toProductDependencyGraphTuples :: [PD.ProductDependency] -> [([(Product,Language)], ServiceID)]
 toProductDependencyGraphTuples aesonDeps = fmap productDependencyToTuple aesonDeps
@@ -101,7 +101,7 @@ registerService register broker =
                , services = M.insert serviceID service (services broker)
                , portPool = restPool
                }
-    [] -> error "no more ports avaialable"
+    [] -> error "no more ports available"
 
 deregisterService :: ServiceID -> Broker -> Broker
 {-# INLINE deregisterService #-}
