@@ -63,6 +63,21 @@ spec = do
       pythonCodeCMsg vid src = P.ProductMessage vid src pythonCodeCompletion completions python "" (toJSON (0::Int))
       pythonSourceMsg vid src = S.SourceMessage vid src python ""
 
+  context "Service management" $
+
+    it "can handle services of two different languages" $ do
+          let broker = register pythonParser [PD.ProductDescription pythonAstProduct python] [pythonSource]
+                     $ register javaParser [PD.ProductDescription ast java] [javaSource]
+                     $ B.empty (Port 5010) (Port 5020)
+          void $ flip execStateT broker $ do
+            -- Arrival of sm of python s20 should only generate request for python parser for s20
+            B.newVersion (pythonS20 v1) `shouldBe'`
+              [Request "s20" pythonParser [SourceMessage (pythonS20 v1)]]
+
+            -- Arrival of sm of java s1 should only generate request for java for s1
+            B.newVersion (s1 v1) `shouldBe'`
+              [Request "s1" javaParser [SourceMessage (s1 v1)]]
+
   context "Product dependencies" $ do
 
     let broker = register javaCodeCompletion [PD.ProductDescription completions java] [javaSource, ProductDependency javaParser ast java]
@@ -124,19 +139,6 @@ spec = do
         -- Registration of dynamic dependency 'code completions service for s20 depends on source of s20' should immediately generate request
         B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
           Just (Request "s20" pythonCodeCompletion [SourceMessage (pythonSourceMsg v1 "s20")])
-
-    it "can handle services of two different languages" $ do
-      let broker = register pythonParser [PD.ProductDescription pythonAstProduct python] [pythonSource]
-                 $ register javaParser [PD.ProductDescription ast java] [javaSource]
-                 $ B.empty (Port 5010) (Port 5020)
-      void $ flip execStateT broker $ do
-        -- Arrival of sm of python s20 should only generate request for python parser for s20
-        B.newVersion (pythonS20 v1) `shouldBe'`
-          [Request "s20" pythonParser [SourceMessage (pythonS20 v1)]]
-
-        -- Arrival of sm of java s1 should only generate request for java for s1
-        B.newVersion (s1 v1) `shouldBe'`
-          [Request "s1" javaParser [SourceMessage (s1 v1)]]
 
     it "can track complex dynamic product dependencies" $ do
       let broker = register pythonCodeCompletion [PD.ProductDescription pythonCompletionsProduct python] [PDEP.ProductDependency pythonParser pythonAstProduct python]
