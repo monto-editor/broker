@@ -121,11 +121,24 @@ spec = do
 
   context "Dynamic dependencies" $ do
 
-    it "can handle product and dynamic dependencies at once" $ do
-      undefined
+    it "creates requests for dynamic dependencies only if they have arrived" $ do
+      let broker = register pythonCodeCompletion [PD.ProductDescription pythonCompletionsProduct python] [PDEP.ProductDependency pythonParser pythonAstProduct python]
+                 $ B.empty (Port 5010) (Port 5020)
 
-    it "can creates requests for dynamic dependencies only if they have arrived" $ do
-      undefined
+      void $ flip execStateT broker $ do
+
+        B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
+          Nothing
+
+        -- Arrival of sm of s20 should generate no codeCompletion requests
+        B.newVersion (pythonS20 v1) `shouldBe'`
+          []
+
+        let pythonAstMsgS20 = pythonAstMsg v1 "s20"
+
+        -- Arrival of ast pm of s20 should generate codeCompletion request for s20
+        B.newProduct pythonAstMsgS20 `shouldBe'`
+          [Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20, SourceMessage (pythonS20 v1)]]
 
     it "creates requests for new dynamic dependencies instantly, if they are already fulfilled" $ do
       let broker = register pythonCodeCompletion [PD.ProductDescription pythonCompletionsProduct python] []
