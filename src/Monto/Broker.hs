@@ -70,7 +70,7 @@ empty from to = Broker
 -- |Creates one product dependency graph node and edge for each given ProductDependency originating from a JSON.
 -- These nodes and edges can be used for insertion into the product dependency graph.
 toProductDependencyGraphTuples :: [PD.ProductDependency] -> [([(Product,Language)], ServiceID)]
-toProductDependencyGraphTuples aesonDeps = fmap productDependencyToTuple aesonDeps
+toProductDependencyGraphTuples = fmap productDependencyToTuple
   where
     productDependencyToTuple (PD.ProductDependency sid prod lang) = ([(prod,lang)],sid)
     productDependencyToTuple (PD.SourceDependency lang) = ([("source",lang)],"source")
