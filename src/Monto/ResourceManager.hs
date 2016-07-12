@@ -7,13 +7,11 @@ module Monto.ResourceManager
   , updateProduct
   , lookupSourceMessage
   , lookupProductMessage
-  , missingSources
   )
   where
 
 import           Data.Map (Map)
 import qualified Data.Map as M
-import qualified Data.Set as S
 import           Data.Maybe
 
 import           Monto.Types
@@ -57,5 +55,3 @@ lookupSourceMessage src resourceMgr = M.lookup src (sources resourceMgr)
 lookupProductMessage :: (Source,ServiceID,Product,Language) -> ResourceManager -> Maybe ProductMessage
 lookupProductMessage k resourceMgr = M.lookup k (products resourceMgr)
 
-missingSources :: [Source] -> ResourceManager -> S.Set Source
-missingSources requiredSources resourceMgr = S.fromList(requiredSources) S.\\ S.fromList((M.keys(sources resourceMgr)))
