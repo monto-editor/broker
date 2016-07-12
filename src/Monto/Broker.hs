@@ -206,11 +206,12 @@ printBroker broker = do
   print (services broker)
   putStrLn "Port Pool:"
   print (portPool broker)
+  R.printResourceManager $ resourceMgr broker
   printProductDependencyGraph broker
   printDynamicDependencyGraph broker
 
 printProductDependencyGraph :: Broker -> IO ()
-printProductDependencyGraph broker = do 
+printProductDependencyGraph broker = do
   putStrLn "Product Dependency Graph:"
   print (productDependencies broker)
 

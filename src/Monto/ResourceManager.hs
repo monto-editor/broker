@@ -7,6 +7,7 @@ module Monto.ResourceManager
   , updateProduct
   , lookupSourceMessage
   , lookupProductMessage
+  , printResourceManager
   )
   where
 
@@ -55,3 +56,10 @@ lookupSourceMessage src resourceMgr = M.lookup src (sources resourceMgr)
 lookupProductMessage :: (Source,ServiceID,Product,Language) -> ResourceManager -> Maybe ProductMessage
 lookupProductMessage k resourceMgr = M.lookup k (products resourceMgr)
 
+printResourceManager :: ResourceManager -> IO ()
+printResourceManager resMgr = do
+  putStrLn "ResourceManager"
+  putStrLn "- sources:"
+  print (sources resMgr)
+  putStrLn "- products:"
+  print (products resMgr)
