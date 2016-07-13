@@ -141,7 +141,7 @@ spec = do
 
     it "creates requests for new dynamic dependencies instantly, if they are already fulfilled" $ do
       let broker = register pythonCodeCompletion [PD.ProductDescription completions python] []
-                   $ B.empty (Port 5010) (Port 5020)
+                 $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
 
         -- Arrival of sm of s20 should generate no codeCompletion requests
@@ -151,6 +151,29 @@ spec = do
         -- Registration of dynamic dependency 'code completions service for s20 depends on source of s20' should immediately generate request
         B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
           Just (Request "s20" pythonCodeCompletion [SourceMessage (pythonSourceMsg v1 "s20")])
+
+    it "overrides dynamic dependencies, if they are defined twice" $ do
+      let broker = register pythonCodeCompletion [] []
+                 $ register pythonParser [PD.ProductDescription ast python] [pythonSource]
+                 $ B.empty (Port 5010) (Port 5020)
+      void $ flip execStateT broker $ do
+
+        -- pythonCodeCompletion has no static dependencies
+
+        -- Register (s20,pythonCodeCompletion) depends on (s20,source)
+        B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
+          Nothing
+
+        -- But then override (s20,source) with (s20,ast) dependency
+        B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" pythonParser ast python]) `shouldBe'`
+          Nothing
+
+        B.newVersion (pythonS20 v1) `shouldBe'`
+          [Request "s20" pythonParser [SourceMessage (pythonS20 v1)]]
+
+        -- Arrival of ast of s20 should generate request with only the ast dependency. Source dependency should have been overridden
+        B.newProduct (pythonAstMsg v1 "s20") `shouldBe'`
+          [Request "s20" pythonCodeCompletion [ProductMessage (pythonAstMsg v1 "s20")]]
 
     it "can track complex dynamic product dependencies" $ do
       let broker = register pythonCodeCompletion [PD.ProductDescription completions python] [PDEP.ProductDependency pythonParser ast python]
