@@ -16,6 +16,7 @@ library
                        Monto.CommandMessage,
                        Monto.ConfigurationMessage,
                        Monto.DependencyGraph,
+                       Monto.DependencyGraphCommandMessages,
                        Monto.DeregisterService,
                        Monto.DiscoverRequest,
                        Monto.DiscoverResponse,
