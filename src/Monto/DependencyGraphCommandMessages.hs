@@ -11,13 +11,13 @@ import           Monto.Types
 data DependencyGraphCommandMessages
   = DependencyGraphCommandMessages
   { cmdDeps :: Map CommandMessage (Set (Source,ServiceID,Product,Language))
-  , depsCmd :: Map (Source,ServiceID,Product,Language) (Set CommandMessage)
+  , depCmds :: Map (Source,ServiceID,Product,Language) (Set CommandMessage)
   } deriving (Eq,Show)
 
 empty :: DependencyGraphCommandMessages
 empty = DependencyGraphCommandMessages
   { cmdDeps = M.empty
-  , depsCmd = M.empty
+  , depCmds = M.empty
   }
 
 addDependency :: CommandMessage -> [(Source,ServiceID,Product,Language)] -> DependencyGraphCommandMessages -> DependencyGraphCommandMessages
@@ -25,7 +25,7 @@ addDependency cmdMsg depsList graph =
   let deps = S.fromList depsList
   in DependencyGraphCommandMessages -- TODO: why in Broker always `in broker {}`?
     { cmdDeps   = M.insertWith S.union cmdMsg deps (cmdDeps graph)
-    , depsCmd   = foldl (\acc cur -> M.insertWith S.union cur (S.singleton cmdMsg) acc) (depsCmd graph) deps
+    , depCmds   = foldl (\acc cur -> M.insertWith S.union cur (S.singleton cmdMsg) acc) (depCmds graph) deps
     }
 
 removeCommandMessage :: CommandMessage -> DependencyGraphCommandMessages -> DependencyGraphCommandMessages
@@ -35,7 +35,7 @@ removeCommandMessage cmdMsg graph =
     Just depsWithCmdMsg ->
       DependencyGraphCommandMessages
       { cmdDeps = M.delete cmdMsg (cmdDeps graph)
-      , depsCmd = S.foldl (\acc cur -> M.update (setDifferenceMaybe cmdMsg) cur acc) (depsCmd graph) depsWithCmdMsg
+      , depCmds = S.foldl (\acc cur -> M.update (setDifferenceMaybe cmdMsg) cur acc) (depCmds graph) depsWithCmdMsg
       }
 
 setDifferenceMaybe :: CommandMessage -> Set CommandMessage -> Maybe (Set CommandMessage)
