@@ -1,6 +1,6 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections     #-}
 module Monto.Broker
   ( empty
   , printBroker
@@ -17,44 +17,45 @@ module Monto.Broker
   )
   where
 
-import           Prelude hiding (product)
+import           Prelude                              hiding (product)
 
 #if __GLASGOW_HASKELL__ < 710
-import           Control.Applicative hiding (empty)
+import           Control.Applicative                  hiding (empty)
 #endif
 
+import qualified Data.List                            as L
+import           Data.Map                             (Map)
+import qualified Data.Map                             as M
 import           Data.Maybe
-import qualified Data.List as List
-import           Data.Map (Map)
-import qualified Data.Map as M
-import           Data.Tuple (swap)
+import           Data.Tuple                           (swap)
 
-import qualified Monto.DynamicDependency as DD
+import           Monto.DependencyGraph                (DependencyGraph)
+import qualified Monto.DependencyGraph                as DG
+import qualified Monto.DynamicDependency              as DD
+import qualified Monto.ProductDependency              as PD
+import           Monto.ProductMessage                 (ProductMessage)
+import qualified Monto.ProductMessage                 as PM
+import qualified Monto.RegisterDynamicDependencies    as RD
+import           Monto.RegisterServiceRequest         (RegisterServiceRequest)
+import qualified Monto.RegisterServiceRequest         as RQ
+import           Monto.Request                        (Request)
+import qualified Monto.Request                        as Req
+import           Monto.ResourceManager                (ResourceManager)
+import qualified Monto.ResourceManager                as R
+import           Monto.Service                        (Service (Service))
+import qualified Monto.Service                        as Ser
+import           Monto.SourceMessage                  (SourceMessage)
+import qualified Monto.SourceMessage                  as SM
 import           Monto.Types
-import           Monto.SourceMessage (SourceMessage)
-import qualified Monto.SourceMessage as SM
-import           Monto.ProductMessage (ProductMessage)
-import qualified Monto.ProductMessage as P
-import           Monto.ResourceManager (ResourceManager)
-import qualified Monto.ProductDependency as PD
-import qualified Monto.RegisterDynamicDependencies as RD
-import qualified Monto.ResourceManager as R
-import           Monto.DependencyGraph (DependencyGraph)
-import qualified Monto.DependencyGraph as DG
-import           Monto.RegisterServiceRequest (RegisterServiceRequest)
-import qualified Monto.RegisterServiceRequest as RQ
-import           Monto.Service(Service(Service))
-import qualified Monto.Service as S
-import           Monto.Request (Request)
-import qualified Monto.Request as Req
+
 
 data Broker = Broker
-  { resourceMgr         :: ResourceManager
+  { resourceMgr                :: ResourceManager
   --                                       node type          edge type
-  , productDependencies :: DependencyGraph ServiceID          [(Product,Language)]
-  , dynamicDependencies :: DependencyGraph (Source,ServiceID) [(Product,Language)]
-  , services            :: Map ServiceID Service
-  , portPool            :: [Port]
+  , productDependencies        :: DependencyGraph ServiceID          [(Product,Language)]
+  , dynamicDependencies        :: DependencyGraph (Source,ServiceID) [(Product,Language)]
+  , services                   :: Map ServiceID Service
+  , portPool                   :: [Port]
   } deriving (Eq,Show)
 
 empty :: Port -> Port -> Broker
@@ -109,7 +110,7 @@ deregisterService serviceID broker = fromMaybe broker $ do
   service <- M.lookup serviceID (services broker)
   return broker
     { services = M.delete serviceID (services broker)
-    , portPool = List.insert (S.port service) (portPool broker)
+    , portPool = L.insert (Ser.port service) (portPool broker)
     , productDependencies = DG.deregister serviceID (productDependencies broker)
     }
 
@@ -132,10 +133,10 @@ newProduct pr broker
     let broker' = broker
           { resourceMgr = R.updateProduct pr $ resourceMgr broker
           }
-        source = P.source pr
-        language = P.language pr
-        product = P.product pr
-        serviceID = P.serviceID pr
+        source = PM.source pr
+        language = PM.language pr
+        product = PM.product pr
+        serviceID = PM.serviceID pr
     in (servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker', broker')
 
 newDynamicDependency :: RD.RegisterDynamicDependencies -> Broker -> (Maybe Request, Broker)
@@ -143,7 +144,7 @@ newDynamicDependency regMsg broker =
   let source = RD.source regMsg
       serviceID = RD.serviceID regMsg
       deps = toDynamicDependencyGraphTuples (RD.dependencies regMsg)
-      broker' = broker 
+      broker' = broker
         { dynamicDependencies = DG.register (source, serviceID) deps (dynamicDependencies broker)
         }
   in (hasSatisfiedDependencies broker' (source,serviceID), broker')
@@ -161,7 +162,7 @@ servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker =
 
 -- |Finds nodes in the product and dynamic DG, which depend on the given source and serviceID.
 -- In the product DG only the serviceID is used the find dependencies.
--- Found dependencies in the product DG :: ServiceID get paired with the given source, 
+-- Found dependencies in the product DG :: ServiceID get paired with the given source,
 -- so that they can be put in one list with found dependencies of the dynamic DG :: (Source, ServiceID).
 -- The found nodes are additionally filtered, so that they must have an adjacent edge with the given (Product,Language) tuple.
 reverseDependenciesOf :: (Product,Language) -> (Source,ServiceID) -> Broker -> [(Source,ServiceID)]
