@@ -4,6 +4,7 @@ import           Data.Map             (Map)
 import qualified Data.Map             as M
 import           Data.Set             (Set)
 import qualified Data.Set             as S
+
 import           Monto.CommandMessage (CommandMessage)
 import           Monto.Types
 
@@ -34,10 +35,10 @@ removeCommandMessage cmdMsg graph =
     Just depsWithCmdMsg ->
       DependencyGraphCommandMessages
       { cmdDeps = M.delete cmdMsg (cmdDeps graph)
-      , depsCmd = S.foldl (\acc cur -> M.update (differenceSetMaybe cmdMsg) cur acc) (depsCmd graph) depsWithCmdMsg
+      , depsCmd = S.foldl (\acc cur -> M.update (setDifferenceMaybe cmdMsg) cur acc) (depsCmd graph) depsWithCmdMsg
       }
 
-differenceSetMaybe :: CommandMessage -> Set CommandMessage -> Maybe (Set CommandMessage)
-differenceSetMaybe cmdMsg set = 
+setDifferenceMaybe :: CommandMessage -> Set CommandMessage -> Maybe (Set CommandMessage)
+setDifferenceMaybe cmdMsg set =
   let newSet = S.delete cmdMsg set
   in if S.null newSet then Nothing else Just newSet
