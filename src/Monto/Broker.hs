@@ -121,7 +121,7 @@ deregisterService serviceID broker = fromMaybe broker $ do
     , productDependencies = DG.deregister serviceID (productDependencies broker)
     }
 
-newVersion :: SourceMessage -> Broker -> ([Request],[CommandMessage],Broker)
+newVersion :: SourceMessage -> Broker -> (([Request],[CommandMessage]),Broker)
 {-# INLINE newVersion #-}
 newVersion srcMsg broker =
   let broker' = broker
@@ -130,14 +130,14 @@ newVersion srcMsg broker =
       source = SM.source srcMsg
       language = SM.language srcMsg
       serviceID = "source"
-  in (servicesWithSatisfiedDependencies ("source",language) (source,serviceID) broker',
-      commandMessagesWithSatisfiedDependencies (source,serviceID,"source",language) (resourceMgr broker') (commandMessageDependencies broker'),
+  in ((servicesWithSatisfiedDependencies ("source",language) (source,serviceID) broker',
+       commandMessagesWithSatisfiedDependencies (source,serviceID,"source",language) (resourceMgr broker') (commandMessageDependencies broker')),
       broker')
 
-newProduct :: ProductMessage -> Broker -> ([Request],[CommandMessage],Broker)
+newProduct :: ProductMessage -> Broker -> (([Request],[CommandMessage]),Broker)
 {-# INLINE newProduct #-}
 newProduct pr broker
-  | R.isOutdated pr (resourceMgr broker) = ([],[],broker)
+  | R.isOutdated pr (resourceMgr broker) = (([],[]),broker)
   | otherwise =
     let broker' = broker
           { resourceMgr = R.updateProduct pr $ resourceMgr broker
@@ -146,8 +146,8 @@ newProduct pr broker
         language = PM.language pr
         product = PM.product pr
         serviceID = PM.serviceID pr
-    in (servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker',
-        commandMessagesWithSatisfiedDependencies (source,serviceID,product,language) (resourceMgr broker') (commandMessageDependencies broker'),
+    in ((servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker',
+         commandMessagesWithSatisfiedDependencies (source,serviceID,product,language) (resourceMgr broker') (commandMessageDependencies broker')),
         broker')
 
 newDynamicDependency :: RD.RegisterDynamicDependencies -> Broker -> (Maybe Request, Broker)

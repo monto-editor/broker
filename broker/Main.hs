@@ -214,7 +214,7 @@ runServiceThread opts ctx snk appstate port@(Port p) =
   where
     onProductMessage = onMessage opts B.newProduct
     onRegisterDynamicDependenciesMessage = onMessage opts (\msg broker -> let (maybeRequest, broker') = B.newDynamicDependency msg broker
-                                                                          in  (maybeRequest,Nothing,broker'))
+                                                                          in  ((maybeRequest,Nothing),broker'))
     onRegisterCommandMessageDependenciesMessage regMsg (broker,pool) = return (B.newCommandMessageDependency regMsg broker, pool)
 
 maybeT :: Monad m => Maybe a -> MaybeT m a
@@ -229,10 +229,10 @@ sendToService sid msg (broker,pool) = void $ runMaybeT $ do
   socket <- maybeT $ M.lookup port pool
   lift $ Z.send socket [] $ convertBslToBs msg
 
-onMessage :: Foldable f => Options -> (message -> Broker -> (f Request,f CommandMessage,Broker)) -> message -> AppState -> IO AppState
+onMessage :: Foldable f => Options -> (message -> Broker -> ((f Request,f CommandMessage),Broker)) -> message -> AppState -> IO AppState
 {-# INLINE onMessage #-}
 onMessage opts handler msg (broker,pool) = do
-  let (requests,cmdMgs,broker') = handler msg broker
+  let ((requests,cmdMgs),broker') = handler msg broker
   forM_ requests $ \request -> do
     when (debug opts) $ printf "broker -> %s\n" (toText (Req.serviceID request))
     sendToService (Req.serviceID request) (A.encode (Service.Request request)) (broker',pool)
