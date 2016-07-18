@@ -316,6 +316,7 @@ spec = do
           ([], [])
 
   where
+    shouldBe' :: (Eq a, Show a, MonadTrans t, MonadState s (t IO)) => (s -> (a, s)) -> a -> t IO ()
     shouldBe' actual expected = do
       act <- state actual
       lift $ act `shouldBe` expected
