@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module BrokerSpec(spec) where
 
-import           Control.Arrow
 import           Control.Monad.State
 
 import           Data.Aeson                        (toJSON)
@@ -69,11 +68,11 @@ spec = do
                      $ B.empty (Port 5010) (Port 5020)
           void $ flip execStateT broker $ do
             -- Arrival of sm of python s20 should only generate request for python parser for s20
-            B.newVersion (pythonS20 v1) `shouldBe'`
+            B.newVersion (pythonS20 v1) `shouldBeAsSetTuple`
               ([Request "s20" pythonParser [SourceMessage (pythonS20 v1)]], [])
 
             -- Arrival of sm of java s1 should only generate request for java for s1
-            B.newVersion (javaS1 v1) `shouldBe'`
+            B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
               ([Request "s1" javaParser [SourceMessage (javaS1 v1)]], [])
 
   context "Product dependencies" $ do
@@ -87,33 +86,33 @@ spec = do
     it "can manage static server dependencies" $
       void $ flip execStateT broker $ do
 
-        B.newVersion (javaS1 v1) `shouldBe'` ([
+        B.newVersion (javaS1 v1) `shouldBeAsSetTuple` ([
           Request "s1" javaParser [SourceMessage (javaS1 v1)],
           Request "s1" javaTokenizer [SourceMessage (javaS1 v1)]
           ], [])
 
         let ast1 = javaAstMsg v1 "s1"
-        B.newProduct ast1 `shouldBe'` ([
+        B.newProduct ast1 `shouldBeAsSetTuple` ([
           Request "s1" javaCodeCompletion [SourceMessage (javaS1 v1), ProductMessage ast1],
           Request "s1" javaTypechecker [SourceMessage (javaS1 v1), ProductMessage ast1]
           ], [])
 
-        B.newProduct (javaTokenMsg v1 "s1") `shouldBe'` ([], [])
-        B.newProduct (javaCodeCMsg v1 "s1") `shouldBe'` ([], [])
-        B.newProduct (javaTypeMsg v1 "s1") `shouldBe'` ([], [])
+        B.newProduct (javaTokenMsg v1 "s1") `shouldBeAsSetTuple` ([], [])
+        B.newProduct (javaCodeCMsg v1 "s1") `shouldBeAsSetTuple` ([], [])
+        B.newProduct (javaTypeMsg v1 "s1") `shouldBeAsSetTuple` ([], [])
 
     it "can deal with outdated products" $ do
       _ <- flip execStateT broker $ do
         let currentId = VersionID 42
             outdatedId = VersionID 41
 
-        B.newVersion (javaS1 currentId) `shouldBe'` ([
+        B.newVersion (javaS1 currentId) `shouldBeAsSetTuple` ([
           Request "s1" javaParser [SourceMessage (javaS1 currentId)],
           Request "s1" javaTokenizer [SourceMessage (javaS1 currentId)]
           ], [])
 
         -- outdated product arrives
-        B.newProduct (javaAstMsg outdatedId "s1") `shouldBe'` ([], [])
+        B.newProduct (javaAstMsg outdatedId "s1") `shouldBeAsSetTuple` ([], [])
 
       return ()
 
@@ -129,13 +128,13 @@ spec = do
           Nothing
 
         -- Arrival of sm of s20 should generate no codeCompletion requests
-        B.newVersion (pythonS20 v1) `shouldBe'`
+        B.newVersion (pythonS20 v1) `shouldBeAsSetTuple`
           ([], [])
 
         let pythonAstMsgS20 = pythonAstMsg v1 "s20"
 
         -- Arrival of ast pm of s20 should generate codeCompletion request for s20
-        B.newProduct pythonAstMsgS20 `shouldBe'`
+        B.newProduct pythonAstMsgS20 `shouldBeAsSetTuple`
           ([Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20, SourceMessage (pythonS20 v1)]], [])
 
     it "creates requests for new dynamic dependencies instantly, if they are already fulfilled" $ do
@@ -144,7 +143,7 @@ spec = do
       void $ flip execStateT broker $ do
 
         -- Arrival of sm of s20 should generate no codeCompletion requests
-        B.newVersion (pythonS20 v1) `shouldBe'`
+        B.newVersion (pythonS20 v1) `shouldBeAsSetTuple`
           ([], [])
 
         -- Registration of dynamic dependency 'code completions service for s20 depends on source of s20' should immediately generate request
@@ -167,11 +166,11 @@ spec = do
         B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" pythonParser ast python]) `shouldBe'`
           Nothing
 
-        B.newVersion (pythonS20 v1) `shouldBe'`
+        B.newVersion (pythonS20 v1) `shouldBeAsSetTuple`
           ([Request "s20" pythonParser [SourceMessage (pythonS20 v1)]], [])
 
         -- Arrival of ast of s20 should generate request with only the ast dependency. Source dependency should have been overridden
-        B.newProduct (pythonAstMsg v1 "s20") `shouldBe'`
+        B.newProduct (pythonAstMsg v1 "s20") `shouldBeAsSetTuple`
           ([Request "s20" pythonCodeCompletion [ProductMessage (pythonAstMsg v1 "s20")]], [])
 
     it "can track complex dynamic product dependencies" $ do
@@ -200,11 +199,11 @@ spec = do
         --
 
         -- Arrival of sm of s20 should generate parser request for s20
-        B.newVersion (pythonS20 v1) `shouldBe'`
+        B.newVersion (pythonS20 v1) `shouldBeAsSetTuple`
           ([Request "s20" pythonParser [SourceMessage (pythonS20 v1)]], [])
 
         -- Arrival of sm of s21 should generate parser request for s21
-        B.newVersion (pythonS21 v1) `shouldBe'`
+        B.newVersion (pythonS21 v1) `shouldBeAsSetTuple`
           ([Request "s21" pythonParser [SourceMessage (pythonS21 v1)]], [])
 
         -- Registration of dynamic dependency 'python parser service for s21 depends on ast of s20' should not generate requests
@@ -212,13 +211,13 @@ spec = do
           Nothing
 
         -- Arrival of sm of s21 should generate no requests, because ast pm of s20 is also required to generate parser request for s21
-        B.newVersion (pythonS21 v1) `shouldBe'`
+        B.newVersion (pythonS21 v1) `shouldBeAsSetTuple`
           ([], [])
 
         let pythonAstMsgS20 = pythonAstMsg v1 "s20"
 
         -- Arrival of ast pm of s20 should generate parser request for s21 and codeC request for s20
-        B.newProduct pythonAstMsgS20 `shouldBe'` ([
+        B.newProduct pythonAstMsgS20 `shouldBeAsSetTuple` ([
           Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20],
           Request "s21" pythonParser [ProductMessage pythonAstMsgS20, SourceMessage (pythonS21 v1)]
           ], [])
@@ -231,11 +230,11 @@ spec = do
         let pythonAstMsgS21 = pythonAstMsg v1 "s21"
 
         -- Arrival of completion pm of s20 should generate no requests, because nothing depends on it
-        B.newProduct pythonCodeCMsg20 `shouldBe'`
+        B.newProduct pythonCodeCMsg20 `shouldBeAsSetTuple`
           ([], [])
 
         -- Arrival of ast pm of s21 should generate codeC request for s21
-        B.newProduct pythonAstMsgS21 `shouldBe'`
+        B.newProduct pythonAstMsgS21 `shouldBeAsSetTuple`
           ([Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21]], [])
 
         -- After registration of a dynamic dependency, that is already fulfilled, the request for it should be generated immediately
@@ -271,20 +270,20 @@ spec = do
           Nothing
 
         -- Arrival of sm of s1 should generate parser request for s1
-        B.newVersion (javaS1 v1) `shouldBe'`
+        B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([Request "s1" javaParser [SourceMessage (javaS1 v1)]], [])
 
         -- Arrival of ast pm of s1 should generate typechecker request for s1
-        B.newProduct ast1s1 `shouldBe'`
+        B.newProduct ast1s1 `shouldBeAsSetTuple`
           ([Request "s1" javaTypechecker [ProductMessage ast1s1, SourceMessage (javaS1 v1)]], [])
 
         -- Arrival of sm of s2 should generate parser request for s2
-        B.newVersion (javaS2 v1) `shouldBe'`
+        B.newVersion (javaS2 v1) `shouldBeAsSetTuple`
           ([Request "s2" javaParser [SourceMessage (javaS2 v1)]], [])
 
         -- Arrival of ast pm of s2 should generate typechecker request for s2
         -- note: there is no dyn dep on errors of s2 yet, only on errors of s3
-        B.newProduct ast1s2 `shouldBe'`
+        B.newProduct ast1s2 `shouldBeAsSetTuple`
           ([Request "s2" javaTypechecker [ProductMessage ast1s2, SourceMessage (javaS2 v1)]], [])
 
         -- Registration of dynamic dependency 'java typechecker service for s2 depends on errors of s1' should not generate requests
@@ -292,31 +291,41 @@ spec = do
           Nothing
 
         -- Arrival of errors pm of s1 should generate typechecker request for s2, because of dynamic dependency
-        B.newProduct type1s1 `shouldBe'`
+        B.newProduct type1s1 `shouldBeAsSetTuple`
           ([Request "s2" javaTypechecker [ProductMessage type1s1, ProductMessage ast1s2, SourceMessage(javaS2 v1)]], [])
 
         -- Arrival of errors pm of s2 should generate no requests, because product dependencies of errors of s3 are not satiesfied
-        B.newProduct type1s2 `shouldBe'`
+        B.newProduct type1s2 `shouldBeAsSetTuple`
           ([], [])
 
         -- Arrival of sm of s3 should generate parser request for s3
-        B.newVersion (javaS3 v1) `shouldBe'`
+        B.newVersion (javaS3 v1) `shouldBeAsSetTuple`
           ([Request "s3" javaParser [SourceMessage (javaS3 v1)]], [])
 
         -- Arrival of ast pm of s3 should generate typechecker request for s3
-        B.newProduct ast1s3 `shouldBe'`
+        B.newProduct ast1s3 `shouldBeAsSetTuple`
           ([Request "s3" javaTypechecker [ProductMessage type1s2, ProductMessage ast1s3, SourceMessage (javaS3 v1)]], [])
 
         -- Arrival of errors pm of s1 should still generate typechecker request for s2, because of dynamic dependency
-        B.newProduct type1s1 `shouldBe'`
+        B.newProduct type1s1 `shouldBeAsSetTuple`
           ([Request "s2" javaTypechecker [ProductMessage ast1s2, ProductMessage type1s1, SourceMessage(javaS2 v1)]], [])
 
         -- Arrival of errors pm of s3 should generate no request, because nothing depends on it
-        B.newProduct type1s3 `shouldBe'`
+        B.newProduct type1s3 `shouldBeAsSetTuple`
           ([], [])
 
   where
-    shouldBe' :: (Eq a, Show a, MonadTrans t, MonadState s (t IO)) => (s -> (a, s)) -> a -> t IO ()
+    shouldBe' :: (Eq a, Show a, MonadTrans t, MonadState s (t IO)) =>
+      (s -> (a, s)) -> a -> t IO ()
     shouldBe' actual expected = do
       act <- state actual
       lift $ act `shouldBe` expected
+
+    shouldBeAsSetTuple :: (Ord a1, Ord a2, Show a1, Show a2, MonadTrans t, MonadState s (t IO)) =>
+      (s -> (([a1], [a2]), s)) -> ([a1], [a2]) -> t IO ()
+    shouldBeAsSetTuple actual (expectedRequests,expectedCommandMessages) = do
+      act <- state actual
+      lift $ case act of
+        (actualRequests,actualCommandMessages) ->
+          (S.fromList actualRequests, S.fromList actualCommandMessages) `shouldBe` (S.fromList expectedRequests, S.fromList expectedCommandMessages)
+
