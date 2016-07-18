@@ -3,11 +3,11 @@ module Monto.MessagesIDE where
 
 import           Data.Aeson.TH
 import           Monto.CommandMessage
-import           Monto.SourceMessage
-import           Monto.ProductMessage
 import           Monto.ConfigurationMessage
 import           Monto.DiscoverRequest
 import           Monto.DiscoverResponse
+import           Monto.ProductMessage
+import           Monto.SourceMessage
 
 data MessageFromIDE = SourceMessage SourceMessage
                     | ConfigurationMessages [ConfigurationMessage]

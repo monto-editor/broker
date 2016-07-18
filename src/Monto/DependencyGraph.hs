@@ -1,11 +1,11 @@
 {-# LANGUAGE TupleSections #-}
 module Monto.DependencyGraph where
 
-import           Data.Graph.Inductive (Gr,Node,Context,Adj)
+import           Data.Graph.Inductive (Adj, Context, Gr, Node)
 import qualified Data.Graph.Inductive as G
-import           Data.List (mapAccumR)
-import           Data.Map (Map)
-import qualified Data.Map as M
+import           Data.List            (mapAccumR)
+import           Data.Map             (Map)
+import qualified Data.Map             as M
 import           Data.Maybe
 
 data DependencyGraph v e

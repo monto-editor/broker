@@ -1,9 +1,10 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Monto.ConfigurationMessage where
 
-import           Data.Aeson.TH
-import           Data.Aeson (Value)
+import           Data.Aeson        (Value)
 import           Data.Aeson.Casing (snakeCase)
+import           Data.Aeson.TH
 
 import           Monto.Types
 

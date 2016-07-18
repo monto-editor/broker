@@ -17,45 +17,45 @@ module Monto.Broker
   )
   where
 
-import           Prelude                              hiding (product)
+import           Prelude                           hiding (product)
 
 #if __GLASGOW_HASKELL__ < 710
-import           Control.Applicative                  hiding (empty)
+import           Control.Applicative               hiding (empty)
 #endif
 
-import qualified Data.List                            as L
-import           Data.Map                             (Map)
-import qualified Data.Map                             as M
+import qualified Data.List                         as L
+import           Data.Map                          (Map)
+import qualified Data.Map                          as M
 import           Data.Maybe
-import           Data.Tuple                           (swap)
+import           Data.Tuple                        (swap)
 
-import           Monto.DependencyGraph                (DependencyGraph)
-import qualified Monto.DependencyGraph                as DG
-import qualified Monto.DynamicDependency              as DD
-import qualified Monto.ProductDependency              as PD
-import           Monto.ProductMessage                 (ProductMessage)
-import qualified Monto.ProductMessage                 as PM
-import qualified Monto.RegisterDynamicDependencies    as RD
-import           Monto.RegisterServiceRequest         (RegisterServiceRequest)
-import qualified Monto.RegisterServiceRequest         as RQ
-import           Monto.Request                        (Request)
-import qualified Monto.Request                        as Req
-import           Monto.ResourceManager                (ResourceManager)
-import qualified Monto.ResourceManager                as R
-import           Monto.Service                        (Service (Service))
-import qualified Monto.Service                        as Ser
-import           Monto.SourceMessage                  (SourceMessage)
-import qualified Monto.SourceMessage                  as SM
+import           Monto.DependencyGraph             (DependencyGraph)
+import qualified Monto.DependencyGraph             as DG
+import qualified Monto.DynamicDependency           as DD
+import qualified Monto.ProductDependency           as PD
+import           Monto.ProductMessage              (ProductMessage)
+import qualified Monto.ProductMessage              as PM
+import qualified Monto.RegisterDynamicDependencies as RD
+import           Monto.RegisterServiceRequest      (RegisterServiceRequest)
+import qualified Monto.RegisterServiceRequest      as RQ
+import           Monto.Request                     (Request)
+import qualified Monto.Request                     as Req
+import           Monto.ResourceManager             (ResourceManager)
+import qualified Monto.ResourceManager             as R
+import           Monto.Service                     (Service (Service))
+import qualified Monto.Service                     as Ser
+import           Monto.SourceMessage               (SourceMessage)
+import qualified Monto.SourceMessage               as SM
 import           Monto.Types
 
 
 data Broker = Broker
-  { resourceMgr                :: ResourceManager
+  { resourceMgr         :: ResourceManager
   --                                       node type          edge type
-  , productDependencies        :: DependencyGraph ServiceID          [(Product,Language)]
-  , dynamicDependencies        :: DependencyGraph (Source,ServiceID) [(Product,Language)]
-  , services                   :: Map ServiceID Service
-  , portPool                   :: [Port]
+  , productDependencies :: DependencyGraph ServiceID          [(Product,Language)]
+  , dynamicDependencies :: DependencyGraph (Source,ServiceID) [(Product,Language)]
+  , services            :: Map ServiceID Service
+  , portPool            :: [Port]
   } deriving (Eq,Show)
 
 empty :: Port -> Port -> Broker

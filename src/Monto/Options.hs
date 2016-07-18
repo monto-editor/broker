@@ -1,42 +1,42 @@
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NamedFieldPuns #-}
 module Monto.Options where
 
 import           Data.Aeson
-import           Data.Text (Text)
 import qualified Data.HashMap.Strict as M
+import           Data.Text           (Text)
 
 import           Monto.Types
 
 
 data Option
   = BoolOption
-    { optionID :: OptionID
-    , label :: Text
+    { optionID               :: OptionID
+    , label                  :: Text
     , boolOptionDefaultValue :: Bool
     }
   | NumberOption
-    { optionID :: OptionID
-    , label :: Text
+    { optionID                 :: OptionID
+    , label                    :: Text
     , numberOptionDefaultValue :: Int
-    , from :: Int
-    , to :: Int
+    , from                     :: Int
+    , to                       :: Int
     }
   | TextOption
-    { optionID :: OptionID
-    , label :: Text
+    { optionID               :: OptionID
+    , label                  :: Text
     , textOptionDefaultValue :: Text
-    , regularExpression :: Text
+    , regularExpression      :: Text
     }
   | XorOption
-    { optionID :: OptionID
-    , label :: Text
+    { optionID              :: OptionID
+    , label                 :: Text
     , xorOptionDefaultValue :: Text
-    , values :: [Text]
+    , values                :: [Text]
     }
   | GroupOption
     { requiredOption :: OptionID
-    , members :: [Option]
+    , members        :: [Option]
     }
 
 instance ToJSON Option where

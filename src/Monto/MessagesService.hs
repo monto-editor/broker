@@ -2,8 +2,8 @@
 module Monto.MessagesService where
 
 import           Data.Aeson.TH
-import           Monto.ConfigurationMessage
 import           Monto.CommandMessage
+import           Monto.ConfigurationMessage
 import           Monto.ProductMessage
 import           Monto.RegisterDynamicDependencies
 import           Monto.Request

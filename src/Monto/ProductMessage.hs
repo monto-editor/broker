@@ -1,22 +1,22 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Monto.ProductMessage where
 
-import           Prelude hiding (id)
-import           Data.Aeson.TH
-import           Data.Aeson (Value)
+import           Data.Aeson        (Value)
 import           Data.Aeson.Casing (snakeCase)
+import           Data.Aeson.TH
+import           Prelude           hiding (id)
 
 import           Monto.Types
 
 data ProductMessage =
   ProductMessage
-    { id           :: VersionID
-    , source       :: Source
-    , serviceID    :: ServiceID
-    , product      :: Product
-    , language     :: Language
-    , contents     :: Value
-    , time         :: Value
+    { id        :: VersionID
+    , source    :: Source
+    , serviceID :: ServiceID
+    , product   :: Product
+    , language  :: Language
+    , contents  :: Value
+    , time      :: Value
     } deriving (Eq,Show)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = snakeCase

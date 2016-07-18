@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 module DependencyGraphCommandMessagesSpec(spec) where
 
-import qualified Data.Map                            as M
-import qualified Data.Set                            as S
+import qualified Data.Map                             as M
+import qualified Data.Set                             as S
 
-import qualified Monto.CommandMessage                as CM
+import qualified Monto.CommandMessage                 as CM
 import           Monto.DependencyGraphCommandMessages as DGCM
 import           Monto.Types
 
@@ -130,7 +130,7 @@ spec = do
     it "should not change if a not added CommandMessage is deleted" $
       DGCM.removeCommandMessage cmdMsg3 (
         DGCM.addDependency cmdMsg1 [(source1,serviceSource,productSource,langJava)] (
-          DGCM.addDependency cmdMsg2 [(source1,serviceSource,productSource,langJava)] 
+          DGCM.addDependency cmdMsg2 [(source1,serviceSource,productSource,langJava)]
             DGCM.empty
       )) `shouldBe`
         DGCM.DependencyGraphCommandMessages

@@ -1,8 +1,9 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Monto.DiscoverRequest where
 
-import           Data.Aeson.TH
 import           Data.Aeson.Casing (snakeCase)
+import           Data.Aeson.TH
 
 import           Monto.Types
 

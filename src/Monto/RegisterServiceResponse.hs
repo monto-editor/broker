@@ -1,16 +1,16 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Monto.RegisterServiceResponse where
 
-import           Data.Aeson.TH
-import           Data.Text (Text)
-import qualified Data.Text as T
 import           Data.Aeson.Casing (snakeCase)
+import           Data.Aeson.TH
+import           Data.Text         (Text)
+import qualified Data.Text         as T
 import           Monto.Types
 
 data RegisterServiceResponse =
   RegisterServiceResponse
-    { response    :: Text
-    , bindOnPort  :: Maybe Port
+    { response   :: Text
+    , bindOnPort :: Maybe Port
     } deriving (Eq)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = snakeCase

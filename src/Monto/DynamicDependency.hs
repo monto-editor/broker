@@ -1,16 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Monto.DynamicDependency where
 
-import           Data.Aeson.TH
 import           Data.Aeson.Casing (snakeCase)
+import           Data.Aeson.TH
 import           Monto.Types
 
 data DynamicDependency = DynamicDependency
-    { source :: Source
+    { source    :: Source
     , serviceID :: ServiceID
-    , product :: Product
-    , language :: Language
+    , product   :: Product
+    , language  :: Language
     } deriving (Eq,Show,Ord)
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = snakeCase

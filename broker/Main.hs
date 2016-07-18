@@ -1,40 +1,42 @@
-{-# LANGUAGE OverloadedStrings,ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
-import           System.ZMQ4 (Pair,Context,Socket)
-import qualified System.ZMQ4 as Z hiding (message,source)
-import           System.Posix.Signals (installHandler, Handler(Catch), sigINT, sigTERM)
+import           System.Posix.Signals          (Handler (Catch), installHandler,
+                                                sigINT, sigTERM)
+import           System.ZMQ4                   (Context, Pair, Socket)
+import qualified System.ZMQ4                   as Z hiding (message, source)
 
 import           Control.Concurrent
 import           Control.Monad
-import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans
-import qualified Data.Aeson as A
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy.Char8 as BSL
-import qualified Data.List as List
-import           Data.Map (Map)
-import qualified Data.Map as M
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import           Control.Monad.Trans.Maybe
+import qualified Data.Aeson                    as A
+import qualified Data.ByteString.Char8         as BS
+import qualified Data.ByteString.Lazy.Char8    as BSL
+import qualified Data.List                     as List
+import           Data.Map                      (Map)
+import qualified Data.Map                      as M
+import qualified Data.Text                     as T
+import qualified Data.Text.IO                  as T
 
-import           Monto.Broker (Broker)
-import qualified Monto.Broker as B
-import           Monto.ConfigurationMessage (ConfigurationMessage(..))
-import qualified Monto.CommandMessage as CM
-import qualified Monto.DeregisterService as D
-import           Monto.DiscoverResponse (DiscoverResponse)
-import qualified Monto.DiscoverResponse as DiscoverResp
-import qualified Monto.ProductMessage as P
-import qualified Monto.Request as Req
-import           Monto.Request (Request)
-import qualified Monto.RegisterServiceRequest as RQ
+import           Monto.Broker                  (Broker)
+import qualified Monto.Broker                  as B
+import qualified Monto.CommandMessage          as CM
+import           Monto.ConfigurationMessage    (ConfigurationMessage (..))
+import qualified Monto.DeregisterService       as D
+import           Monto.DiscoverResponse        (DiscoverResponse)
+import qualified Monto.DiscoverResponse        as DiscoverResp
+import qualified Monto.MessagesIDE             as IDE
+import qualified Monto.MessagesService         as Service
+import qualified Monto.ProductMessage          as P
+import qualified Monto.RegisterServiceRequest  as RQ
 import qualified Monto.RegisterServiceResponse as RS
+import           Monto.Request                 (Request)
+import qualified Monto.Request                 as Req
+import qualified Monto.Service                 as S
+import qualified Monto.SourceMessage           as S
 import           Monto.Types
-import qualified Monto.SourceMessage as S
-import qualified Monto.MessagesIDE as IDE
-import qualified Monto.MessagesService as Service
-import qualified Monto.Service as S
 
 import           Options.Applicative
 
@@ -45,13 +47,13 @@ type SocketPool = Map Port (Socket Pair)
 type AppState = (Broker, SocketPool)
 
 data Options = Options
-  { debug         :: Bool
-  , debugGraphs   :: Bool
-  , sink          :: Addr
-  , source        :: Addr
-  , registration  :: Addr
-  , fromPort      :: Port
-  , toPort        :: Port
+  { debug        :: Bool
+  , debugGraphs  :: Bool
+  , sink         :: Addr
+  , source       :: Addr
+  , registration :: Addr
+  , fromPort     :: Port
+  , toPort       :: Port
   }
 
 options :: Parser Options
@@ -194,7 +196,7 @@ runServiceThread opts ctx snk appstate port@(Port p) =
     Z.bind serviceSocket ("tcp://*:" ++ show p)
     printf "listen on address tcp://*:%d for service\n" p
     modifyMVar_ appstate $ \(broker, socketPool) -> return (broker, M.insert port serviceSocket socketPool)
-    forever $ do        
+    forever $ do
       rawMsg <- Z.receive serviceSocket
       case A.eitherDecodeStrict rawMsg of
         Right (Service.ProductMessage msg) -> do
@@ -211,7 +213,7 @@ runServiceThread opts ctx snk appstate port@(Port p) =
 
 maybeT :: Monad m => Maybe a -> MaybeT m a
 maybeT = MaybeT . return
-                   
+
 getBroker :: MVar AppState -> IO Broker
 getBroker = fmap fst . readMVar
 

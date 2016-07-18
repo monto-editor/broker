@@ -1,9 +1,10 @@
-{-# Language TemplateHaskell, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TemplateHaskell            #-}
 module Monto.Types where
 
 import           Data.Aeson.TH
-import           Data.Text (Text)
 import           Data.String
+import           Data.Text     (Text)
 
 newtype VersionID = VersionID Int
   deriving (Eq,Ord,Show)

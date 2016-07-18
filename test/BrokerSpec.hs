@@ -1,22 +1,23 @@
-{-# LANGUAGE CPP, OverloadedStrings #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
 module BrokerSpec(spec) where
 
-import           Control.Monad.State
 import           Control.Arrow
+import           Control.Monad.State
 
-import qualified Data.Set as S
-import           Data.Aeson (toJSON)
+import           Data.Aeson                        (toJSON)
+import qualified Data.Set                          as S
 
-import qualified Monto.Broker as B
-import qualified Monto.DynamicDependency as DD
-import qualified Monto.SourceMessage as S
-import qualified Monto.ProductMessage as P
-import qualified Monto.ProductDescription as PD
-import           Monto.ProductDependency as PDEP
-import           Monto.Types
+import qualified Monto.Broker                      as B
+import qualified Monto.DynamicDependency           as DD
+import           Monto.ProductDependency           as PDEP
+import qualified Monto.ProductDescription          as PD
+import qualified Monto.ProductMessage              as P
 import qualified Monto.RegisterDynamicDependencies as RD
 import           Monto.RegisterServiceRequest
 import           Monto.Request
+import qualified Monto.SourceMessage               as S
+import           Monto.Types
 
 import           Test.Hspec
 
@@ -220,7 +221,7 @@ spec = do
 
         -- Arrival of ast pm of s20 should generate parser request for s21 and codeC request for s20
         B.newProduct pythonAstMsgS20 `shouldBe'`
-          [Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20], 
+          [Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20],
            Request "s21" pythonParser [ProductMessage pythonAstMsgS20, SourceMessage (pythonS21 v1)]]
 
 
@@ -240,7 +241,7 @@ spec = do
         -- After registration of a dynamic dependency, that is already fulfilled, the request for it should be generated immediately
         -- completions of s21 now depends on ast of s21 (via product dependency) and on completions of s20 (via dynamic dependency)
 
-        -- Registration of dynamic dependency 'code completions service for s21 depends on completions product of s20' should 
+        -- Registration of dynamic dependency 'code completions service for s21 depends on completions product of s20' should
         -- immediately generate request for itself, because all products and sources are already available
         B.newDynamicDependency (RD.RegisterDynamicDependencies "s21" pythonCodeCompletion [DD.DynamicDependency "s20" pythonCodeCompletion completions python]) `shouldBe'`
           Just (Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21, ProductMessage pythonCodeCMsg20])

@@ -2,14 +2,14 @@
 module Monto.ProductDependency where
 
 import           Data.Aeson
-import           Monto.Types
 import qualified Data.HashMap.Strict as M
+import           Monto.Types
 
 data ProductDependency
     = ProductDependency
       { serviceID :: ServiceID
-      , product :: Product
-      , language :: Language
+      , product   :: Product
+      , language  :: Language
       }
     | SourceDependency
       { language :: Language

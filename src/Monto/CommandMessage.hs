@@ -1,21 +1,21 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Monto.CommandMessage where
 
-import           Prelude hiding (id)
-import           Data.Aeson.TH
-import           Data.Aeson (Value)
+import           Data.Aeson        (Value)
 import           Data.Aeson.Casing (snakeCase)
-import           Data.Text (Text)
+import           Data.Aeson.TH
+import           Data.Text         (Text)
+import           Prelude           hiding (id)
 
 import           Monto.Types
 
 data CommandMessage =
   CommandMessage
-    { id         :: Int
-    , session    :: Int
-    , serviceID  :: ServiceID
-    , tag        :: Text
-    , contents   :: Value
+    { id        :: Int
+    , session   :: Int
+    , serviceID :: ServiceID
+    , tag       :: Text
+    , contents  :: Value
     } deriving (Show)
 
 -- TODO instances correct?

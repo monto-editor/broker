@@ -1,18 +1,18 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Monto.SourceMessage where
 
-import           Prelude hiding (id)
-import           Data.Text (Text)
 import           Data.Aeson.TH
+import           Data.Text     (Text)
+import           Prelude       hiding (id)
 
 import           Monto.Types
 
 data SourceMessage =
   SourceMessage
-    { id         :: VersionID
-    , source     :: Source
-    , language   :: Language
-    , contents   :: Text
+    { id       :: VersionID
+    , source   :: Source
+    , language :: Language
+    , contents :: Text
     } deriving (Eq,Show)
 $(deriveJSON defaultOptions ''SourceMessage)
 

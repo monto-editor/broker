@@ -1,15 +1,16 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Monto.Request where
 
-import           Data.Aeson.TH
 import           Data.Aeson
-import           Data.Aeson.Casing (snakeCase)
+import           Data.Aeson.Casing    (snakeCase)
+import           Data.Aeson.TH
 import           Data.Maybe
-import qualified Data.Set as S
+import qualified Data.Set             as S
 
-import           Monto.Types
-import           Monto.SourceMessage (SourceMessage)
 import           Monto.ProductMessage (ProductMessage)
+import           Monto.SourceMessage  (SourceMessage)
+import           Monto.Types
 
 data Message = SourceMessage SourceMessage | ProductMessage ProductMessage
   deriving (Eq,Ord,Show)
@@ -26,8 +27,8 @@ instance FromJSON Message where
        else SourceMessage <$> parseJSON (Object obj)
 
 data Request = Request
-    { source :: Source
-    , serviceID :: ServiceID
+    { source       :: Source
+    , serviceID    :: ServiceID
     , requirements :: [Message]
     }
   deriving (Ord,Show)

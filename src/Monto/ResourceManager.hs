@@ -11,15 +11,15 @@ module Monto.ResourceManager
   )
   where
 
-import           Data.Map (Map)
-import qualified Data.Map as M
+import           Data.Map             (Map)
+import qualified Data.Map             as M
 import           Data.Maybe
 
-import           Monto.Types
-import           Monto.SourceMessage (SourceMessage)
-import qualified Monto.SourceMessage as S
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
+import           Monto.SourceMessage  (SourceMessage)
+import qualified Monto.SourceMessage  as S
+import           Monto.Types
 
 data ResourceManager = ResourceManager
   { sources  :: Map Source SourceMessage

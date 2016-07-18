@@ -1,14 +1,15 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Monto.RegisterServiceRequest where
 
+import           Data.Aeson               (Value)
+import           Data.Aeson.Casing        (snakeCase)
 import           Data.Aeson.TH
-import           Data.Aeson (Value)
-import           Data.Aeson.Casing (snakeCase)
-import           Data.Text (Text)
+import           Data.Text                (Text)
 
-import           Monto.Types
-import           Monto.ProductDescription
 import           Monto.ProductDependency
+import           Monto.ProductDescription
+import           Monto.Types
 
 data RegisterServiceRequest =
   RegisterServiceRequest
