@@ -21,16 +21,11 @@ data CommandMessage =
     , requirements :: [Message]
     } deriving (Show)
 
--- TODO instances correct?
 instance Ord CommandMessage where
-  compare x y =
-    let sessionOrd = compare (session x) (session y)
-    in case sessionOrd of
-      EQ -> compare (id x) (id y)
-      _ -> sessionOrd
+  compare x y = compare (session x, id x, serviceID x, tag x) (session y, id y, serviceID y, tag y)
 
 instance Eq CommandMessage where
-  x == y = (session x == session y) && (id x == id y)
+  x == y = (session x, id x, serviceID x, tag x) == (session y, id y, serviceID y, tag y)
 
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = snakeCase
