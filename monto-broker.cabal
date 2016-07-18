@@ -27,6 +27,7 @@ library
                        Monto.ProductDependency,
                        Monto.ProductMessage,
                        Monto.ProductDescription,
+                       Monto.RegisterCommandMessageDependencies
                        Monto.RegisterDynamicDependencies
                        Monto.RegisterServiceRequest,
                        Monto.RegisterServiceResponse,

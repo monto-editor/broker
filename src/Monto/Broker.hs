@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
 module Monto.Broker
   ( empty
   , printBroker
@@ -9,53 +8,60 @@ module Monto.Broker
   , printProductDependencyGraph
   , printDynamicDependencyGraph
   , Broker(..)
-  , newDynamicDependency
   , newVersion
   , newProduct
-  , servicesWithSatisfiedDependencies
+  , newDynamicDependency
+  , newCommandMessageDependency
   , Service(..)
+  , deleteCommandMessageDependencies
   )
   where
 
-import           Prelude                           hiding (product)
+import           Prelude                                  hiding (id, product)
 
 #if __GLASGOW_HASKELL__ < 710
-import           Control.Applicative               hiding (empty)
+import           Control.Applicative                      hiding (empty)
 #endif
 
-import qualified Data.List                         as L
-import           Data.Map                          (Map)
-import qualified Data.Map                          as M
+import qualified Data.List                                as L
+import           Data.Map                                 (Map)
+import qualified Data.Map                                 as M
 import           Data.Maybe
-import           Data.Tuple                        (swap)
+import           Data.Tuple                               (swap)
 
-import           Monto.DependencyGraph             (DependencyGraph)
-import qualified Monto.DependencyGraph             as DG
-import qualified Monto.DynamicDependency           as DD
-import qualified Monto.ProductDependency           as PD
-import           Monto.ProductMessage              (ProductMessage)
-import qualified Monto.ProductMessage              as PM
-import qualified Monto.RegisterDynamicDependencies as RD
-import           Monto.RegisterServiceRequest      (RegisterServiceRequest)
-import qualified Monto.RegisterServiceRequest      as RQ
-import           Monto.Request                     (Request)
-import qualified Monto.Request                     as Req
-import           Monto.ResourceManager             (ResourceManager)
-import qualified Monto.ResourceManager             as R
-import           Monto.Service                     (Service (Service))
-import qualified Monto.Service                     as Ser
-import           Monto.SourceMessage               (SourceMessage)
-import qualified Monto.SourceMessage               as SM
+import           Monto.CommandMessage                     (CommandMessage)
+import qualified Monto.CommandMessage                     as CM
+import           Monto.DependencyGraph                    (DependencyGraph)
+import qualified Monto.DependencyGraph                    as DG
+import           Monto.DependencyGraphCommandMessages     (DependencyGraphCommandMessages)
+import qualified Monto.DependencyGraphCommandMessages     as DGCM
+import qualified Monto.DynamicDependency                  as DD
+import qualified Monto.ProductDependency                  as PD
+import           Monto.ProductMessage                     (ProductMessage)
+import qualified Monto.ProductMessage                     as PM
+import qualified Monto.RegisterCommandMessageDependencies as RCMD
+import qualified Monto.RegisterDynamicDependencies        as RD
+import           Monto.RegisterServiceRequest             (RegisterServiceRequest)
+import qualified Monto.RegisterServiceRequest             as RQ
+import           Monto.Request                            (Request)
+import qualified Monto.Request                            as Req
+import           Monto.ResourceManager                    (ResourceManager)
+import qualified Monto.ResourceManager                    as R
+import           Monto.Service                            (Service (Service))
+import qualified Monto.Service                            as Ser
+import           Monto.SourceMessage                      (SourceMessage)
+import qualified Monto.SourceMessage                      as SM
 import           Monto.Types
 
 
 data Broker = Broker
-  { resourceMgr         :: ResourceManager
+  { resourceMgr                :: ResourceManager
   --                                       node type          edge type
-  , productDependencies :: DependencyGraph ServiceID          [(Product,Language)]
-  , dynamicDependencies :: DependencyGraph (Source,ServiceID) [(Product,Language)]
-  , services            :: Map ServiceID Service
-  , portPool            :: [Port]
+  , productDependencies        :: DependencyGraph ServiceID          [(Product,Language)]
+  , dynamicDependencies        :: DependencyGraph (Source,ServiceID) [(Product,Language)]
+  , commandMessageDependencies :: DependencyGraphCommandMessages
+  , services                   :: Map ServiceID Service
+  , portPool                   :: [Port]
   } deriving (Eq,Show)
 
 empty :: Port -> Port -> Broker
@@ -64,6 +70,7 @@ empty from to = Broker
   { resourceMgr = R.empty
   , productDependencies = DG.register "source" [] DG.empty
   , dynamicDependencies = DG.empty
+  , commandMessageDependencies = DGCM.empty
   , services = M.empty
   , portPool = [from..to]
   }
@@ -114,7 +121,7 @@ deregisterService serviceID broker = fromMaybe broker $ do
     , productDependencies = DG.deregister serviceID (productDependencies broker)
     }
 
-newVersion :: SourceMessage -> Broker -> ([Request],Broker)
+newVersion :: SourceMessage -> Broker -> ([Request],[CommandMessage],Broker)
 {-# INLINE newVersion #-}
 newVersion srcMsg broker =
   let broker' = broker
@@ -123,12 +130,14 @@ newVersion srcMsg broker =
       source = SM.source srcMsg
       language = SM.language srcMsg
       serviceID = "source"
-  in (servicesWithSatisfiedDependencies ("source",language) (source,serviceID) broker', broker')
+  in (servicesWithSatisfiedDependencies ("source",language) (source,serviceID) broker',
+      commandMessagesWithSatisfiedDependencies (source,serviceID,"source",language) (resourceMgr broker') (commandMessageDependencies broker'),
+      broker')
 
-newProduct :: ProductMessage -> Broker -> ([Request],Broker)
+newProduct :: ProductMessage -> Broker -> ([Request],[CommandMessage],Broker)
 {-# INLINE newProduct #-}
 newProduct pr broker
-  | R.isOutdated pr (resourceMgr broker) = ([],broker)
+  | R.isOutdated pr (resourceMgr broker) = ([],[],broker)
   | otherwise =
     let broker' = broker
           { resourceMgr = R.updateProduct pr $ resourceMgr broker
@@ -137,7 +146,9 @@ newProduct pr broker
         language = PM.language pr
         product = PM.product pr
         serviceID = PM.serviceID pr
-    in (servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker', broker')
+    in (servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker',
+        commandMessagesWithSatisfiedDependencies (source,serviceID,product,language) (resourceMgr broker') (commandMessageDependencies broker'),
+        broker')
 
 newDynamicDependency :: RD.RegisterDynamicDependencies -> Broker -> (Maybe Request, Broker)
 newDynamicDependency regMsg broker =
@@ -148,6 +159,12 @@ newDynamicDependency regMsg broker =
         { dynamicDependencies = DG.register (source, serviceID) deps (dynamicDependencies broker)
         }
   in (hasSatisfiedDependencies broker' (source,serviceID), broker')
+
+newCommandMessageDependency :: RCMD.RegisterCommandMessageDependencies -> Broker -> Broker
+newCommandMessageDependency regMsg broker =
+  broker
+    { commandMessageDependencies = DGCM.addDependency (RCMD.commandMessage regMsg) (RCMD.dependencies regMsg) (commandMessageDependencies broker)
+    }
 
 -- |Creates requests for those registered services, whose product and dynamic dependencies are fulfilled.
 -- The given (Product,Language) tuple indicated, which product in which language just became available.
@@ -199,6 +216,26 @@ isSatisfied rMgr (edges, (source, serviceID)) =
     then fmap (\srcmsg -> [Req.SourceMessage srcmsg]) (R.lookupSourceMessage source rMgr)
     else mapM (\(product, language) ->
       Req.ProductMessage <$> R.lookupProductMessage (source, serviceID, product, language) rMgr) edges
+
+commandMessagesWithSatisfiedDependencies :: (Source,ServiceID,Product,Language) -> ResourceManager -> DependencyGraphCommandMessages -> [CommandMessage]
+commandMessagesWithSatisfiedDependencies newSatisfiedDep resMgr graph =
+  catMaybes $ (\possiblySatisfiedCmdMsg ->
+    isCommandMessageSatisfied possiblySatisfiedCmdMsg resMgr graph)
+      <$> DGCM.lookupDependencyCommandMessages newSatisfiedDep graph
+
+isCommandMessageSatisfied :: CommandMessage -> ResourceManager -> DependencyGraphCommandMessages -> Maybe CommandMessage
+isCommandMessageSatisfied cmdMsg resMgr graph =
+  (\requirements -> cmdMsg { CM.requirements = requirements })
+    <$> mapM (\(source,serviceID,product,language) ->
+               if serviceID == "source"
+                 then Req.SourceMessage  <$> R.lookupSourceMessage source resMgr
+                 else Req.ProductMessage <$> R.lookupProductMessage (source,serviceID,product,language) resMgr
+             ) (DGCM.lookupCommandMessageDependencies cmdMsg graph)
+
+deleteCommandMessageDependencies :: Foldable f => f CommandMessage -> Broker -> Broker
+deleteCommandMessageDependencies cmdMsgs broker =
+  broker
+    { commandMessageDependencies = foldl (\acc cur -> DGCM.removeCommandMessage cur acc) (commandMessageDependencies broker) cmdMsgs }
 
 
 printBroker :: Broker -> IO()

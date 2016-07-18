@@ -22,6 +22,7 @@ import qualified Data.Text.IO                  as T
 
 import           Monto.Broker                  (Broker)
 import qualified Monto.Broker                  as B
+import           Monto.CommandMessage          (CommandMessage)
 import qualified Monto.CommandMessage          as CM
 import           Monto.ConfigurationMessage    (ConfigurationMessage (..))
 import qualified Monto.DeregisterService       as D
@@ -204,12 +205,17 @@ runServiceThread opts ctx snk appstate port@(Port p) =
           when (debug opts) $ T.putStrLn $ T.concat [toText $ P.product msg, "/", toText $ P.language msg, " -> broker"]
           modifyMVar_ appstate $ onProductMessage msg
         Right (Service.DynamicDependency msg) -> do
-          when (debug opts) $ putStrLn $ show msg
+          when (debug opts) $ print msg
           modifyMVar_ appstate $ onRegisterDynamicDependenciesMessage msg
+        Right (Service.CommandMessageDependency msg) -> do
+          when (debug opts) $ print msg
+          modifyMVar_ appstate $ onRegisterCommandMessageDependenciesMessage msg
         Left err -> printf "Couldn't parse this message from service: %s\nBecause %s\n" (show rawMsg) err
   where
     onProductMessage = onMessage opts B.newProduct
-    onRegisterDynamicDependenciesMessage = onMessage opts B.newDynamicDependency
+    onRegisterDynamicDependenciesMessage = onMessage opts (\msg broker -> let (maybeRequest, broker') = B.newDynamicDependency msg broker
+                                                                          in  (maybeRequest,Nothing,broker'))
+    onRegisterCommandMessageDependenciesMessage regMsg (broker,pool) = return (B.newCommandMessageDependency regMsg broker, pool)
 
 maybeT :: Monad m => Maybe a -> MaybeT m a
 maybeT = MaybeT . return
@@ -223,14 +229,18 @@ sendToService sid msg (broker,pool) = void $ runMaybeT $ do
   socket <- maybeT $ M.lookup port pool
   lift $ Z.send socket [] $ convertBslToBs msg
 
-onMessage :: Foldable f => Options -> (message -> Broker -> (f Request,Broker)) -> message -> AppState -> IO AppState
+onMessage :: Foldable f => Options -> (message -> Broker -> (f Request,f CommandMessage,Broker)) -> message -> AppState -> IO AppState
 {-# INLINE onMessage #-}
 onMessage opts handler msg (broker,pool) = do
-  let (requests,broker') = handler msg broker
+  let (requests,cmdMgs,broker') = handler msg broker
   forM_ requests $ \request -> do
     when (debug opts) $ printf "broker -> %s\n" (toText (Req.serviceID request))
     sendToService (Req.serviceID request) (A.encode (Service.Request request)) (broker',pool)
-  return (broker', pool)
+  forM_ cmdMgs $ \cmdMsg -> do
+    when (debug opts) $ printf "broker -> cmd %s\n" (toText (CM.serviceID cmdMsg))
+    sendToService (CM.serviceID cmdMsg) (A.encode (Service.CommandMessage cmdMsg)) (broker',pool)
+  let broker'' = B.deleteCommandMessageDependencies cmdMgs broker'
+  return (broker'', pool)
 
 convertBslToBs :: BSL.ByteString -> BS.ByteString
 convertBslToBs msg =

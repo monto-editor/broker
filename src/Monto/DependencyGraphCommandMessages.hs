@@ -20,6 +20,7 @@ empty = DependencyGraphCommandMessages
   , depCmds = M.empty
   }
 
+--TODO: removeCmd before add to delete old dependencies?
 addDependency :: CommandMessage -> [(Source,ServiceID,Product,Language)] -> DependencyGraphCommandMessages -> DependencyGraphCommandMessages
 addDependency cmdMsg depsList graph =
   let deps = S.fromList depsList
@@ -42,3 +43,15 @@ setDifferenceMaybe :: CommandMessage -> Set CommandMessage -> Maybe (Set Command
 setDifferenceMaybe cmdMsg set =
   let newSet = S.delete cmdMsg set
   in if S.null newSet then Nothing else Just newSet
+
+lookupCommandMessageDependencies :: CommandMessage -> DependencyGraphCommandMessages -> [(Source,ServiceID,Product,Language)]
+lookupCommandMessageDependencies cmdMsg graph =
+  case M.lookup cmdMsg (cmdDeps graph) of
+    Nothing -> []
+    Just deps -> S.toList deps
+
+lookupDependencyCommandMessages :: (Source,ServiceID,Product,Language) -> DependencyGraphCommandMessages -> [CommandMessage]
+lookupDependencyCommandMessages dep graph =
+  case M.lookup dep (depCmds graph) of
+    Nothing -> []
+    Just cmdMsgs -> S.toList cmdMsgs

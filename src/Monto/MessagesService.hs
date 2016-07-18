@@ -5,6 +5,7 @@ import           Data.Aeson.TH
 import           Monto.CommandMessage
 import           Monto.ConfigurationMessage
 import           Monto.ProductMessage
+import           Monto.RegisterCommandMessageDependencies
 import           Monto.RegisterDynamicDependencies
 import           Monto.Request
 
@@ -21,6 +22,7 @@ $(deriveJSON defaultOptions
 
 data MessageFromService = ProductMessage ProductMessage
                         | DynamicDependency RegisterDynamicDependencies
+                        | CommandMessageDependency RegisterCommandMessageDependencies
 $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "ProductMessage" -> "product"

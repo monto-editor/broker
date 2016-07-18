@@ -1,5 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Monto.RegisterDynamicDependencies where
 
 import           Data.Aeson.Casing       (snakeCase)
