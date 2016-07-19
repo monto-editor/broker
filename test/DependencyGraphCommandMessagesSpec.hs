@@ -138,3 +138,72 @@ spec = do
                                 (cmdMsg2,S.fromList [(source1,serviceSource,productSource,langJava)])]
         , depCmds = M.fromList [((source1,serviceSource,productSource,langJava), S.fromList [cmdMsg1,cmdMsg2])]
         }
+
+  context "CommandMessage identity" $ do
+    it "should identify a CommandMessage based on session, id, serviceID and tag (positive)" $
+      -- if session,id,serviceID,tag are the same on add and remove, the CommandMessage should be deleted
+      DGCM.removeCommandMessage (CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" []) (
+        DGCM.addDependency (CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" []) [(source1,serviceSource,productSource,langJava)]
+            DGCM.empty
+      ) `shouldBe`
+        DGCM.empty
+
+    it "should identify a CommandMessage based on session, id, serviceID and tag (negative 1)" $
+      -- if session is different on add and remove, the CommandMessage shouldn't be deleted
+      DGCM.removeCommandMessage (CM.CommandMessage 2 1 serviceParser "cmdDoStuff" "content" []) (
+        DGCM.addDependency (CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" []) [(source1,serviceSource,productSource,langJava)]
+            DGCM.empty
+      ) `shouldBe`
+        DGCM.DependencyGraphCommandMessages
+        { cmdDeps = M.fromList [(CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" [],S.fromList [(source1,serviceSource,productSource,langJava)])]
+        , depCmds = M.fromList [((source1,serviceSource,productSource,langJava), S.fromList [CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" []])]
+        }
+
+    it "should identify a CommandMessage based on session, id, serviceID and tag (negative 2)" $
+      -- if id is different on add and remove, the CommandMessage shouldn't be deleted
+      DGCM.removeCommandMessage (CM.CommandMessage 1 2 serviceParser "cmdDoStuff" "content" []) (
+        DGCM.addDependency (CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" []) [(source1,serviceSource,productSource,langJava)]
+            DGCM.empty
+      ) `shouldBe`
+        DGCM.DependencyGraphCommandMessages
+        { cmdDeps = M.fromList [(CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" [],S.fromList [(source1,serviceSource,productSource,langJava)])]
+        , depCmds = M.fromList [((source1,serviceSource,productSource,langJava), S.fromList [CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" []])]
+        }
+
+    it "should identify a CommandMessage based on session, id, serviceID and tag (negative 3)" $
+      -- if serviceID is different on add and remove, the CommandMessage shouldn't be deleted
+      DGCM.removeCommandMessage (CM.CommandMessage 1 2 serviceParser "cmdDoStuff" "content" []) (
+        DGCM.addDependency (CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" []) [(source1,serviceSource,productSource,langJava)]
+            DGCM.empty
+      ) `shouldBe`
+        DGCM.DependencyGraphCommandMessages
+        { cmdDeps = M.fromList [(CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" [],S.fromList [(source1,serviceSource,productSource,langJava)])]
+        , depCmds = M.fromList [((source1,serviceSource,productSource,langJava), S.fromList [CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" []])]
+        }
+
+    it "should identify a CommandMessage based on session, id, serviceID and tag (negative 4)" $
+      -- if tag is different on add and remove, the CommandMessage shouldn't be deleted
+      DGCM.removeCommandMessage (CM.CommandMessage 1 1 serviceParser "cmdDoStuff2" "content" []) (
+        DGCM.addDependency (CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" []) [(source1,serviceSource,productSource,langJava)]
+            DGCM.empty
+      ) `shouldBe`
+        DGCM.DependencyGraphCommandMessages
+        { cmdDeps = M.fromList [(CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" [],S.fromList [(source1,serviceSource,productSource,langJava)])]
+        , depCmds = M.fromList [((source1,serviceSource,productSource,langJava), S.fromList [CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" []])]
+        }
+
+    it "shouldn't identify a CommandMessage based on contents" $
+      -- if contents is different on add and delete, the CommandMessage should still be deleted
+      DGCM.removeCommandMessage (CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content1" []) (
+        DGCM.addDependency (CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content2" []) [(source1,serviceSource,productSource,langJava)]
+            DGCM.empty
+      ) `shouldBe`
+        DGCM.empty
+
+    it "shouldn't identify a CommandMessage based on requirements" $
+      -- if requirements is different on add and delete, the CommandMessage should still be deleted
+      DGCM.removeCommandMessage (CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" [SourceMessage (SM.SourceMessage (VersionID 1) "sourceFile2" langJava "source code")]) (
+        DGCM.addDependency (CM.CommandMessage 1 1 serviceParser "cmdDoStuff" "content" [SourceMessage (SM.SourceMessage (VersionID 1) "sourceFile1" langJava "source code")]) [(source1,serviceSource,productSource,langJava)]
+            DGCM.empty
+      ) `shouldBe`
+        DGCM.empty
