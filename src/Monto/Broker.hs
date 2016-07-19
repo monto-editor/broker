@@ -29,6 +29,8 @@ import qualified Data.Map                                 as M
 import           Data.Maybe
 import           Data.Tuple                               (swap)
 
+import qualified Text.Show.Pretty                         as Pr
+
 import           Monto.CommandMessage                     (CommandMessage)
 import qualified Monto.CommandMessage                     as CM
 import           Monto.DependencyGraph                    (DependencyGraph)
@@ -52,7 +54,6 @@ import qualified Monto.Service                            as Ser
 import           Monto.SourceMessage                      (SourceMessage)
 import qualified Monto.SourceMessage                      as SM
 import           Monto.Types
-import qualified Text.Show.Pretty as Pr
 
 data Broker = Broker
   { resourceMgr                :: ResourceManager
