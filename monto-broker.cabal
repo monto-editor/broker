@@ -43,6 +43,7 @@ library
                        bytestring,
                        containers,
                        fgl,
+                       pretty-show,
                        semigroups,
                        text,
                        vector,

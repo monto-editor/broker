@@ -1,5 +1,5 @@
 { mkDerivation, aeson, aeson-casing, base, bytestring, containers, fgl, hspec
-, mtl, optparse-applicative, QuickCheck, semigroups, stdenv, text
+, mtl, pretty-show, optparse-applicative, QuickCheck, semigroups, stdenv, text
 , unix, unordered-containers, vector, zeromq4-haskell
 }:
 mkDerivation {

@@ -52,7 +52,7 @@ import qualified Monto.Service                            as Ser
 import           Monto.SourceMessage                      (SourceMessage)
 import qualified Monto.SourceMessage                      as SM
 import           Monto.Types
-
+import qualified Text.Show.Pretty as Pr
 
 data Broker = Broker
   { resourceMgr                :: ResourceManager
@@ -241,19 +241,25 @@ deleteCommandMessageDependencies cmdMsgs broker =
 printBroker :: Broker -> IO()
 printBroker broker = do
   putStrLn "Services:"
-  print (services broker)
+  putStrLn $ Pr.ppShow (services broker)
   putStrLn "Port Pool:"
-  print (portPool broker)
+  putStrLn $ Pr.ppShow (portPool broker)
   R.printResourceManager $ resourceMgr broker
   printProductDependencyGraph broker
   printDynamicDependencyGraph broker
+  printCommandMessageDependencyMaps broker
 
 printProductDependencyGraph :: Broker -> IO ()
 printProductDependencyGraph broker = do
   putStrLn "Product Dependency Graph:"
-  print (productDependencies broker)
+  putStrLn $ Pr.ppShow (productDependencies broker)
 
 printDynamicDependencyGraph :: Broker -> IO ()
 printDynamicDependencyGraph broker = do
   putStrLn "Dynamic Dependency Graph:"
-  print (dynamicDependencies broker)
+  putStrLn $ Pr.ppShow (dynamicDependencies broker)
+
+printCommandMessageDependencyMaps :: Broker -> IO ()
+printCommandMessageDependencyMaps broker = do
+  putStrLn "CommandMessage Dependency Graph:"
+  putStrLn $ Pr.ppShow (commandMessageDependencies broker)
