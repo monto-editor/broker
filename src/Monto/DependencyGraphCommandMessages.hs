@@ -20,13 +20,13 @@ empty = DependencyGraphCommandMessages
   , depCmds = M.empty
   }
 
---TODO: removeCmd before add to delete old dependencies?
 addDependency :: CommandMessage -> [(Source,ServiceID,Product,Language)] -> DependencyGraphCommandMessages -> DependencyGraphCommandMessages
 addDependency cmdMsg depsList graph =
-  let deps = S.fromList depsList
-  in DependencyGraphCommandMessages -- TODO: why in Broker always `in broker {}`?
-    { cmdDeps   = M.insertWith S.union cmdMsg deps (cmdDeps graph)
-    , depCmds   = foldl (\acc cur -> M.insertWith S.union cur (S.singleton cmdMsg) acc) (depCmds graph) deps
+  let cleanedGraph = removeCommandMessage cmdMsg graph
+      deps = S.fromList depsList
+  in DependencyGraphCommandMessages
+    { cmdDeps   = M.insertWith S.union cmdMsg deps (cmdDeps cleanedGraph)
+    , depCmds   = foldl (\acc cur -> M.insertWith S.union cur (S.singleton cmdMsg) acc) (depCmds cleanedGraph) deps
     }
 
 removeCommandMessage :: CommandMessage -> DependencyGraphCommandMessages -> DependencyGraphCommandMessages

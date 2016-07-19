@@ -6,6 +6,8 @@ import qualified Data.Set                             as S
 
 import qualified Monto.CommandMessage                 as CM
 import           Monto.DependencyGraphCommandMessages as DGCM
+import           Monto.Request
+import qualified Monto.SourceMessage                  as SM
 import           Monto.Types
 
 import           Test.Hspec
@@ -37,6 +39,17 @@ spec = do
         , depCmds = M.fromList [((source1,serviceSource,productSource,langJava),S.fromList [cmdMsg1])]
         }
 
+    it "should insert multiple dependencies per CommandMessage" $
+      DGCM.addDependency cmdMsg1 [(source1,serviceSource,productSource,langJava),
+                                  (source2,serviceCodeCompletion,productCompletions,langPython)]
+        DGCM.empty `shouldBe`
+          DGCM.DependencyGraphCommandMessages
+          { cmdDeps = M.fromList [(cmdMsg1,S.fromList [(source1,serviceSource,productSource,langJava),
+                                                       (source2,serviceCodeCompletion,productCompletions,langPython)])]
+          , depCmds = M.fromList [((source1,serviceSource,productSource,langJava),               S.fromList [cmdMsg1]),
+                                  ((source2,serviceCodeCompletion,productCompletions,langPython),S.fromList [cmdMsg1])]
+          }
+
     it "should insert dependencies only once" $
       DGCM.addDependency cmdMsg1 [(source1,serviceSource,productSource,langJava)] (
          DGCM.addDependency cmdMsg1 [(source1,serviceSource,productSource,langJava)]
@@ -45,18 +58,6 @@ spec = do
         DGCM.DependencyGraphCommandMessages
         { cmdDeps = M.fromList [(cmdMsg1,S.fromList [(source1,serviceSource,productSource,langJava)])]
         , depCmds = M.fromList [((source1,serviceSource,productSource,langJava),S.fromList [cmdMsg1])]
-        }
-
-    it "should store multiple dependencies per CommandMessage correctly" $
-      DGCM.addDependency cmdMsg1 [(source1,serviceSource,productSource,langJava)] (
-        DGCM.addDependency cmdMsg1 [(source2,serviceCodeCompletion,productCompletions,langPython)]
-            DGCM.empty
-      ) `shouldBe`
-        DGCM.DependencyGraphCommandMessages
-        { cmdDeps = M.fromList [(cmdMsg1,S.fromList [(source1,serviceSource,productSource,langJava),
-                                                     (source2,serviceCodeCompletion,productCompletions,langPython)])]
-        , depCmds = M.fromList [((source1,serviceSource,productSource,langJava),                S.fromList [cmdMsg1]),
-                                ((source2,serviceCodeCompletion,productCompletions,langPython), S.fromList [cmdMsg1])]
         }
 
     it "should store dependencies for multiple CommandMessages" $
@@ -82,11 +83,31 @@ spec = do
         , depCmds = M.fromList [((source2,serviceCodeCompletion,productCompletions,langPython), S.fromList [cmdMsg1,cmdMsg2])]
         }
 
+    it "should override old dependencies if the same CommandMessage is added multiple times" $
+      DGCM.addDependency cmdMsg1 [(source2,serviceCodeCompletion,productCompletions,langJava)] (
+        DGCM.addDependency cmdMsg1 [(source1,serviceCodeCompletion,productCompletions,langPython),
+                                    (source1,serviceSource,productSource,langJava)]
+          DGCM.empty
+      ) `shouldBe`
+        DGCM.DependencyGraphCommandMessages
+        { cmdDeps = M.fromList [(cmdMsg1,S.fromList [(source2,serviceCodeCompletion,productCompletions,langJava)])]
+        , depCmds = M.fromList [((source2,serviceCodeCompletion,productCompletions,langJava), S.fromList [cmdMsg1])]
+        }
+
+
   context "Deletion" $ do
     it "should delete a single CommandMessage" $
       DGCM.removeCommandMessage cmdMsg1 (
         DGCM.addDependency cmdMsg1 [(source1,serviceSource,productSource,langJava)]
             DGCM.empty
+      ) `shouldBe`
+        DGCM.empty
+
+    it "should delete multiple dependencies of one CommandMessage" $
+      DGCM.removeCommandMessage cmdMsg1 (
+        DGCM.addDependency cmdMsg1 [(source1,serviceSource,productSource,langJava),
+                                    (source2,serviceCodeCompletion,productCompletions,langPython)]
+          DGCM.empty
       ) `shouldBe`
         DGCM.empty
 
@@ -104,27 +125,12 @@ spec = do
     it "should delete multiple dependencies of a CommandMessage" $
       DGCM.removeCommandMessage cmdMsg2 (
         DGCM.addDependency cmdMsg1 [(source1,serviceSource,productSource,langJava)] (
-          DGCM.addDependency cmdMsg2 [(source1,serviceSource,productSource,langJava)] (
-            DGCM.addDependency cmdMsg2 [(source2,serviceCodeCompletion,productCompletions,langPython)]
-              DGCM.empty
-      ))) `shouldBe`
+          DGCM.addDependency cmdMsg2 [(source1,serviceSource,productSource,langJava)]
+            DGCM.empty
+      )) `shouldBe`
         DGCM.DependencyGraphCommandMessages
         { cmdDeps = M.fromList [(cmdMsg1,S.fromList [(source1,serviceSource,productSource,langJava)])]
         , depCmds = M.fromList [((source1,serviceSource,productSource,langJava), S.fromList [cmdMsg1])]
-        }
-
-    it "should delete multiple dependencies of a CommandMessage 2" $
-      DGCM.removeCommandMessage cmdMsg2 (
-        DGCM.addDependency cmdMsg1 [(source1,serviceSource,productSource,langJava)] (
-          DGCM.addDependency cmdMsg2 [(source1,serviceSource,productSource,langJava)] (
-            DGCM.addDependency cmdMsg1 [(source2,serviceCodeCompletion,productCompletions,langPython)]
-              DGCM.empty
-      ))) `shouldBe`
-        DGCM.DependencyGraphCommandMessages
-        { cmdDeps = M.fromList [(cmdMsg1,S.fromList [(source1,serviceSource,productSource,langJava),
-                                                     (source2,serviceCodeCompletion,productCompletions,langPython)])]
-        , depCmds = M.fromList [((source1,serviceSource,productSource,langJava),                S.fromList [cmdMsg1]),
-                                ((source2,serviceCodeCompletion,productCompletions,langPython), S.fromList [cmdMsg1])]
         }
 
     it "should not change if a not added CommandMessage is deleted" $
