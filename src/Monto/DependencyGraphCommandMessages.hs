@@ -36,11 +36,11 @@ removeCommandMessage cmdMsg graph =
     Just depsWithCmdMsg ->
       DependencyGraphCommandMessages
       { cmdDeps = M.delete cmdMsg (cmdDeps graph)
-      , depCmds = S.foldl (\acc cur -> M.update (setDifferenceMaybe cmdMsg) cur acc) (depCmds graph) depsWithCmdMsg
+      , depCmds = S.foldl (\acc cur -> M.update (setDeleteMaybe cmdMsg) cur acc) (depCmds graph) depsWithCmdMsg
       }
 
-setDifferenceMaybe :: CommandMessage -> Set CommandMessage -> Maybe (Set CommandMessage)
-setDifferenceMaybe cmdMsg set =
+setDeleteMaybe :: CommandMessage -> Set CommandMessage -> Maybe (Set CommandMessage)
+setDeleteMaybe cmdMsg set =
   let newSet = S.delete cmdMsg set
   in if S.null newSet then Nothing else Just newSet
 
