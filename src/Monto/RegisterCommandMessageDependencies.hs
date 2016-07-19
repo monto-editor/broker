@@ -7,7 +7,7 @@ import           Data.Aeson.TH
 import           Monto.CommandMessage
 import           Monto.Types
 
-data RegisterCommandMessageDependencies = RegisterCommaneMessageDependencies
+data RegisterCommandMessageDependencies = RegisterCommandMessageDependencies
     { commandMessage :: CommandMessage
     , dependencies   :: [(Source,ServiceID,Product,Language)]
     } deriving (Eq,Show,Ord)
