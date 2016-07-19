@@ -25,7 +25,7 @@ addDependency cmdMsg depsList graph =
   let cleanedGraph = removeCommandMessage cmdMsg graph
       deps = S.fromList depsList
   in DependencyGraphCommandMessages
-    { cmdDeps   = M.insertWith S.union cmdMsg deps (cmdDeps cleanedGraph)
+    { cmdDeps   = M.insert cmdMsg deps (cmdDeps cleanedGraph)
     , depCmds   = foldl (\acc cur -> M.insertWith S.union cur (S.singleton cmdMsg) acc) (depCmds cleanedGraph) deps
     }
 
