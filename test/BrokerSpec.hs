@@ -33,6 +33,7 @@ spec = do
       python = "python" :: Language
       tokens = "tokens" :: Product
       ast = "ast" :: Product
+      identifiers = "identifiers" :: Product
       completions = "completions" :: Product
       errors = "errors" :: Product
       sourceProduct = "source" :: Product
@@ -58,10 +59,11 @@ spec = do
       pythonS20 i = S.SourceMessage i "s20" python ""
       pythonS21 i = S.SourceMessage i "s21" python ""
       pythonParser = "pythonParser" :: ServiceID
+      pythonIdentifierFinder = "pythonIdentifierFinder" :: ServiceID
       pythonCodeCompletion = "pythonCodeCompletion" :: ServiceID
       pythonSource = PDEP.ProductDependency "source" "source" python
       pythonAstMsg vid src = P.ProductMessage vid src pythonParser ast python "" (toJSON (0::Int))
-      pythonCodeCMsg vid src = P.ProductMessage vid src pythonCodeCompletion completions python "" (toJSON (0::Int))
+      pythonIdentifiersMsg vid src = P.ProductMessage vid src pythonIdentifierFinder identifiers python "" (toJSON (0::Int))
       pythonSourceMsg vid src = S.SourceMessage vid src python ""
 
   context "Service management" $
@@ -362,7 +364,7 @@ spec = do
 
   context "Combined dependencies" $
     it "should generate CommandMessages, product and dynamic dependencies in combination" $ do
-      let broker = register pythonCodeCompletion [PD.ProductDescription completions python] [PDEP.ProductDependency pythonParser ast python]
+      let broker = register pythonIdentifierFinder [PD.ProductDescription identifiers python] [PDEP.ProductDependency pythonParser ast python]
                  $ register pythonParser [PD.ProductDescription ast python] [pythonSource]
                  $ register javaTypechecker [PD.ProductDescription errors java] [javaSource,PDEP.ProductDependency javaParser ast java]
                  $ register javaParser [PD.ProductDescription ast java] [javaSource]
@@ -380,10 +382,16 @@ spec = do
         --     |                |
         --    PRO              PRO
         --     |                |
-        --   codeC <-- DYN -- codeC
+        --   iden  <-- DYN --  iden
+        --     ^                ^
+        --     |                |
+        --    CMD              CMD
+        --     |                |
+        --   codeC            codeC
         --
         -- PRO = Product Dependency
         -- DYN = Dynamic Dependency
+        -- CMD = Command Message Dependency
         --
 
         -- Arrival of sm of s20 should generate parser request for s20
@@ -404,34 +412,55 @@ spec = do
 
         let pythonAstMsgS20 = pythonAstMsg v1 "s20"
 
-        -- Arrival of ast pm of s20 should generate parser request for s21 and codeC request for s20
+        -- Arrival of ast pm of s20 should generate parser request for s21 and identifier request for s20
         B.newProduct pythonAstMsgS20 `shouldBeAsSetTuple` ([
-          Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20],
+          Request "s20" pythonIdentifierFinder [ProductMessage pythonAstMsgS20],
           Request "s21" pythonParser [ProductMessage pythonAstMsgS20, SourceMessage (pythonS21 v1)]
           ], [])
 
-
-
         -- Test, that requests for directly fulfilled new dynamic dependencies get generated
-        -- First let everything arrive, but codeC of s21
-        let pythonCodeCMsg20 = pythonCodeCMsg v1 "s20"
+        -- First let everything arrive, but identifiers of s21
+        let pythonIdentifiersMsg20 = pythonIdentifiersMsg v1 "s20"
         let pythonAstMsgS21 = pythonAstMsg v1 "s21"
 
         -- Arrival of completion pm of s20 should generate no requests, because nothing depends on it
-        B.newProduct pythonCodeCMsg20 `shouldBeAsSetTuple`
+        B.newProduct pythonIdentifiersMsg20 `shouldBeAsSetTuple`
           ([], [])
 
-        -- Arrival of ast pm of s21 should generate codeC request for s21
+        -- Arrival of ast pm of s21 should generate identifer request for s21
         B.newProduct pythonAstMsgS21 `shouldBeAsSetTuple`
-          ([Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21]], [])
+          ([Request "s21" pythonIdentifierFinder [ProductMessage pythonAstMsgS21]], [])
 
         -- After registration of a dynamic dependency, that is already fulfilled, the request for it should be generated immediately
         -- completions of s21 now depends on ast of s21 (via product dependency) and on completions of s20 (via dynamic dependency)
 
         -- Registration of dynamic dependency 'code completions service for s21 depends on completions product of s20' should
         -- immediately generate request for itself, because all products and sources are already available
-        B.newDynamicDependency (RD.RegisterDynamicDependencies "s21" pythonCodeCompletion [DD.DynamicDependency "s20" pythonCodeCompletion completions python]) `shouldBe'`
-          Just (Request "s21" pythonCodeCompletion [ProductMessage pythonAstMsgS21, ProductMessage pythonCodeCMsg20])
+        B.newDynamicDependency (RD.RegisterDynamicDependencies "s21" pythonIdentifierFinder [DD.DynamicDependency "s20" pythonIdentifierFinder identifiers python]) `shouldBe'`
+          Just (Request "s21" pythonIdentifierFinder [ProductMessage pythonAstMsgS21, ProductMessage pythonIdentifiersMsg20])
+
+        -- Right now the IDE sends a CommandMessage to the pythonCodeCompletion service, because the user wants completions at one specific region in "s20"
+        -- The broker doesn't get notified about any of this (by design).
+        -- The pythonCodeCompletion service then noticies, that it needs the identifiers for "s20" to compare them to the text in the selected region.
+        -- So it declares a CommandMessage dependency.
+
+        -- This dependency is already fulfilled, so the CommandMessage should be returned immediately
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies
+                                         (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "77:5" [])
+                                         [("s20",pythonIdentifierFinder,identifiers,python)]) `shouldBe'`
+          Just (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "77:5" [ProductMessage pythonIdentifiersMsg20])
+
+        -- Then the user wants completions for "s21".
+        -- The identifiers for "s21" have not yet arrived, so no CommandMessage should be returned
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies
+                                         (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "5:0" [])
+                                         [("s21",pythonIdentifierFinder,identifiers,python)]) `shouldBe'`
+          Nothing
+
+        -- Now the completions for "s21" arrive and should trigger the resend of the "s21" pythonCodeCompletion CommandMessage
+        let pythonIdentifiersMsg21 = pythonIdentifiersMsg v1 "s21"
+        B.newProduct pythonIdentifiersMsg21 `shouldBeAsSetTuple`
+          ([],[CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "5:0" [ProductMessage pythonIdentifiersMsg21]])
 
         --
         --     s1                s2                s3
