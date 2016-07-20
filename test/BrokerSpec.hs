@@ -323,12 +323,12 @@ spec = do
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([],[])
 
+        B.newVersion (javaS1 v2) `shouldBeAsSetTuple`
+          ([],[])
+
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
                                      [("s1", sourceService, sourceProduct, java)]) `shouldBe'`
-          Just (CommandMessage 1 1 javaCodeCompletion "" "" [SourceMessage (javaS1 v1)])
-
-        B.newVersion (javaS1 v2) `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 javaCodeCompletion "" "" [SourceMessage (javaS1 v2)]])
+          Just (CommandMessage 1 1 javaCodeCompletion "" "" [SourceMessage (javaS1 v2)])
 
   context "Combined dependencies" $
     it "should generate CommandMessages, product and dynamic dependencies in combination" $ do
