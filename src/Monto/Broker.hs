@@ -236,7 +236,7 @@ isCommandMessageSatisfied cmdMsg resMgr graph =
 deleteCommandMessageDependencies :: Foldable f => f CommandMessage -> Broker -> Broker
 deleteCommandMessageDependencies cmdMsgs broker =
   broker
-    { commandMessageDependencies = foldl (\acc cur -> DGCM.removeCommandMessage cur acc) (commandMessageDependencies broker) cmdMsgs }
+    { commandMessageDependencies = foldr DGCM.removeCommandMessage (commandMessageDependencies broker) cmdMsgs }
 
 
 printBroker :: Broker -> IO()
