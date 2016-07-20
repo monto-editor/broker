@@ -239,8 +239,7 @@ onMessage opts handler msg (broker,pool) = do
   forM_ cmdMgs $ \cmdMsg -> do
     when (debug opts) $ printf "broker -> cmd %s\n" (toText (CM.serviceID cmdMsg))
     sendToService (CM.serviceID cmdMsg) (A.encode (Service.CommandMessage cmdMsg)) (broker',pool)
-  let broker'' = B.deleteCommandMessageDependencies cmdMgs broker'
-  return (broker'', pool)
+  return (broker', pool)
 
 convertBslToBs :: BSL.ByteString -> BS.ByteString
 convertBslToBs msg =

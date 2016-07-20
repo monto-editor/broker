@@ -131,9 +131,9 @@ newVersion srcMsg broker =
       source = SM.source srcMsg
       language = SM.language srcMsg
       serviceID = "source"
-  in ((servicesWithSatisfiedDependencies ("source",language) (source,serviceID) broker',
-       commandMessagesWithSatisfiedDependencies (source,serviceID,"source",language) (resourceMgr broker') (commandMessageDependencies broker')),
-      broker')
+      satisfiedServiceRequests = servicesWithSatisfiedDependencies ("source",language) (source,serviceID) broker'
+      (satisfiedCommandMessages, broker'') = commandMessagesWithSatisfiedDependencies (source,serviceID,"source",language) broker'
+  in ((satisfiedServiceRequests, satisfiedCommandMessages), broker'')
 
 newProduct :: ProductMessage -> Broker -> (([Request],[CommandMessage]),Broker)
 {-# INLINE newProduct #-}
@@ -147,9 +147,9 @@ newProduct pr broker
         language = PM.language pr
         product = PM.product pr
         serviceID = PM.serviceID pr
-    in ((servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker',
-         commandMessagesWithSatisfiedDependencies (source,serviceID,product,language) (resourceMgr broker') (commandMessageDependencies broker')),
-        broker')
+        satisfiedServiceRequests = servicesWithSatisfiedDependencies (product,language) (source,serviceID) broker'
+        (satisfiedCommandMessages, broker'') = commandMessagesWithSatisfiedDependencies (source,serviceID,product,language) broker'
+    in ((satisfiedServiceRequests, satisfiedCommandMessages), broker'')
 
 newDynamicDependency :: RD.RegisterDynamicDependencies -> Broker -> (Maybe Request, Broker)
 newDynamicDependency regMsg broker =
@@ -218,11 +218,14 @@ isSatisfied rMgr (edges, (source, serviceID)) =
     else mapM (\(product, language) ->
       Req.ProductMessage <$> R.lookupProductMessage (source, serviceID, product, language) rMgr) edges
 
-commandMessagesWithSatisfiedDependencies :: (Source,ServiceID,Product,Language) -> ResourceManager -> DependencyGraphCommandMessages -> [CommandMessage]
-commandMessagesWithSatisfiedDependencies newSatisfiedDep resMgr graph =
-  catMaybes $ (\possiblySatisfiedCmdMsg ->
-    isCommandMessageSatisfied possiblySatisfiedCmdMsg resMgr graph)
-      <$> DGCM.lookupDependencyCommandMessages newSatisfiedDep graph
+commandMessagesWithSatisfiedDependencies :: (Source,ServiceID,Product,Language) -> Broker -> ([CommandMessage], Broker)
+commandMessagesWithSatisfiedDependencies newSatisfiedDep broker =
+  let graph = commandMessageDependencies broker
+      cmdMsgs = catMaybes $ (\possiblySatisfiedCmdMsg ->
+                  isCommandMessageSatisfied possiblySatisfiedCmdMsg (resourceMgr broker) graph)
+                    <$> DGCM.lookupDependencyCommandMessages newSatisfiedDep graph
+      broker' = deleteCommandMessageDependencies cmdMsgs broker
+  in (cmdMsgs, broker')
 
 isCommandMessageSatisfied :: CommandMessage -> ResourceManager -> DependencyGraphCommandMessages -> Maybe CommandMessage
 isCommandMessageSatisfied cmdMsg resMgr graph =
