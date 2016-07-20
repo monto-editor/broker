@@ -315,6 +315,36 @@ spec = do
         B.newVersion (javaS2 v1) `shouldBeAsSetTuple`
           ([],[CommandMessage 2 1 javaCodeCompletion "" "" [SourceMessage (javaS2 v1)]])
 
+    it "should generated a CommandMessage if the new CommandMessageDependency is already fulfilled 1" $ do
+      -- source dependency
+      let broker = register javaCodeCompletion [] []
+                 $ B.empty (Port 5010) (Port 5020)
+
+      void $ flip execStateT broker $ do
+        B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
+          ([],[])
+
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+                                     [("s1", sourceService, sourceProduct, java)]) `shouldBe'`
+          Just (CommandMessage 1 1 javaCodeCompletion "" "" [SourceMessage (javaS1 v1)])
+
+    it "should generated a CommandMessage if the new CommandMessageDependency is already fulfilled 2" $ do
+      -- product dependency
+      let broker = register javaParser [PD.ProductDescription ast java] [javaSource]
+                 $ register javaCodeCompletion [] []
+                 $ B.empty (Port 5010) (Port 5020)
+
+      void $ flip execStateT broker $ do
+        B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
+          ([Request "s1" javaParser [SourceMessage (javaS1 v1)]],[])
+
+        B.newProduct (javaAstMsg v1 "s1") `shouldBeAsSetTuple`
+          ([],[])
+
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+                                     [("s1", javaParser, ast, java)]) `shouldBe'`
+          Just (CommandMessage 1 1 javaCodeCompletion "" "" [ProductMessage (javaAstMsg v1 "s1")])
+
     it "should only include the latest version of Messages as dependencies" $ do
       let broker = register javaParser [PD.ProductDescription ast java] []
                  $ B.empty (Port 5010) (Port 5020)
