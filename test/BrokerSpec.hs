@@ -184,8 +184,9 @@ spec = do
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
-                                                [("s1",sourceService,sourceProduct,java)])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
+                                       [("s1",sourceService,sourceProduct,java)]) `shouldBe'`
+          Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([],[CommandMessage 1 1 javaParser "" "" [SourceMessage (javaS1 v1)]])
@@ -195,8 +196,9 @@ spec = do
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
-                                                [("s1",sourceService,sourceProduct,java),("s20",sourceService,sourceProduct,python)])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
+                                       [("s1",sourceService,sourceProduct,java),("s20",sourceService,sourceProduct,python)]) `shouldBe'`
+          Nothing
 
         B.newVersion (pythonS20 v1) `shouldBeAsSetTuple`
           ([],[])
@@ -209,8 +211,9 @@ spec = do
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                                [("s1", javaParser, ast, java)])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+                                       [("s1", javaParser, ast, java)]) `shouldBe'`
+          Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([Request "s1" javaParser [SourceMessage (javaS1 v1)]],[])
@@ -224,8 +227,9 @@ spec = do
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                                [("s1", javaParser, ast, java), ("s1", javaTokenizer, tokens, java)])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+                                       [("s1", javaParser, ast, java), ("s1", javaTokenizer, tokens, java)]) `shouldBe'`
+          Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([Request "s1" javaParser [SourceMessage (javaS1 v1)],Request "s1" javaTokenizer [SourceMessage (javaS1 v1)]],[])
@@ -241,8 +245,9 @@ spec = do
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                                [("s1", javaParser, ast, java), ("s1", sourceService, sourceProduct, java)])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+                                       [("s1", javaParser, ast, java), ("s1", sourceService, sourceProduct, java)]) `shouldBe'`
+          Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([Request "s1" javaParser [SourceMessage (javaS1 v1)]], [])
@@ -256,10 +261,13 @@ spec = do
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                                [("s1", javaParser, ast, java), ("s1", javaTokenizer, tokens, java), ("s1", sourceService, sourceProduct, java)])
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                                [("s1", javaParser, ast, java), ("s1", sourceService, sourceProduct, java)])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+                                       [("s1", javaParser, ast, java), ("s1", javaTokenizer, tokens, java), ("s1", sourceService, sourceProduct, java)]) `shouldBe'`
+          Nothing
+
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+                                       [("s1", javaParser, ast, java), ("s1", sourceService, sourceProduct, java)]) `shouldBe'`
+          Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([Request "s1" javaParser [SourceMessage (javaS1 v1)], Request "s1" javaTokenizer [SourceMessage (javaS1 v1)]], [])
@@ -275,16 +283,12 @@ spec = do
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
-                                                [("s1",sourceService,sourceProduct,java)])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
+                                       [("s1",sourceService,sourceProduct,java)]) `shouldBe'`
+          Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([],[CommandMessage 1 1 javaParser "" "" [SourceMessage (javaS1 v1)]])
-
-        -- B.deleteCommandMessageDependencies is called in onMessage in Main.hs
-        -- Simulate that call, because it is not invoked otherwise
-        -- TODO: move B.deleteCommandMessageDependencies to newVersion / newProduct?
-        modify $ B.deleteCommandMessageDependencies [CommandMessage 1 1 javaParser "" "" [SourceMessage (javaS1 v1)]]
 
         B.newVersion (javaS1 v2) `shouldBeAsSetTuple`
           ([],[])
@@ -297,11 +301,13 @@ spec = do
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                                [("s1",sourceService,sourceProduct,java)])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+                                       [("s1",sourceService,sourceProduct,java)]) `shouldBe'`
+          Nothing
 
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 2 1 javaCodeCompletion "" "" [])
-                                                 [("s2",sourceService,sourceProduct,java)])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 2 1 javaCodeCompletion "" "" [])
+                                        [("s2",sourceService,sourceProduct,java)]) `shouldBe'`
+          Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([],[CommandMessage 1 1 javaCodeCompletion "" "" [SourceMessage (javaS1 v1)]])
@@ -317,8 +323,9 @@ spec = do
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([],[])
 
-        modify $ B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                              [("s1", sourceService, sourceProduct, java)])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+                                     [("s1", sourceService, sourceProduct, java)]) `shouldBe'`
+          Just (CommandMessage 1 1 javaCodeCompletion "" "" [SourceMessage (javaS1 v1)])
 
         B.newVersion (javaS1 v2) `shouldBeAsSetTuple`
           ([],[CommandMessage 1 1 javaCodeCompletion "" "" [SourceMessage (javaS1 v2)]])

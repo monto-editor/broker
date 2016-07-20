@@ -161,11 +161,14 @@ newDynamicDependency regMsg broker =
         }
   in (hasSatisfiedDependencies broker' (source,serviceID), broker')
 
-newCommandMessageDependency :: RCMD.RegisterCommandMessageDependencies -> Broker -> Broker
+newCommandMessageDependency :: RCMD.RegisterCommandMessageDependencies -> Broker -> (Maybe CommandMessage, Broker)
 newCommandMessageDependency regMsg broker =
-  broker
-    { commandMessageDependencies = DGCM.addDependency (RCMD.commandMessage regMsg) (RCMD.dependencies regMsg) (commandMessageDependencies broker)
-    }
+  let cmdMsg = RCMD.commandMessage regMsg
+      broker' = broker
+                  { commandMessageDependencies = DGCM.addDependency (RCMD.commandMessage regMsg) (RCMD.dependencies regMsg) (commandMessageDependencies broker)
+                  }
+      maybeCmgMsg = isCommandMessageSatisfied cmdMsg (resourceMgr broker') (commandMessageDependencies broker')
+  in (maybeCmgMsg, broker')
 
 -- |Creates requests for those registered services, whose product and dynamic dependencies are fulfilled.
 -- The given (Product,Language) tuple indicated, which product in which language just became available.

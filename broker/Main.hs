@@ -215,7 +215,8 @@ runServiceThread opts ctx snk appstate port@(Port p) =
     onProductMessage = onMessage opts B.newProduct
     onRegisterDynamicDependenciesMessage = onMessage opts (\msg broker -> let (maybeRequest, broker') = B.newDynamicDependency msg broker
                                                                           in  ((maybeRequest,Nothing),broker'))
-    onRegisterCommandMessageDependenciesMessage regMsg (broker,pool) = return (B.newCommandMessageDependency regMsg broker, pool)
+    onRegisterCommandMessageDependenciesMessage  = onMessage opts (\msg broker -> let (maybeCommandMessage, broker') = B.newCommandMessageDependency msg broker
+                                                                                  in  ((Nothing,maybeCommandMessage),broker'))
 
 maybeT :: Monad m => Maybe a -> MaybeT m a
 maybeT = MaybeT . return
