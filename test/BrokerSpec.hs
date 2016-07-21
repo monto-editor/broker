@@ -10,15 +10,16 @@ import qualified Data.Set                                 as S
 
 import qualified Monto.Broker                             as B
 import           Monto.CommandMessage
-import qualified Monto.DynamicDependency                  as DD
-import           Monto.ProductDependency                  as PDEP
-import qualified Monto.ProductDescription                 as PD
-import qualified Monto.ProductMessage                     as P
+import           Monto.DynamicDependency
+import           Monto.ProductDependency
+import           Monto.ProductDescription
+import           Monto.ProductMessage
 import           Monto.RegisterCommandMessageDependencies
-import qualified Monto.RegisterDynamicDependencies        as RD
+import           Monto.RegisterDynamicDependencies
 import           Monto.RegisterServiceRequest
-import           Monto.Request
-import qualified Monto.SourceMessage                      as S
+import           Monto.Request                            (Request (Request))
+import qualified Monto.Request                            as Req
+import           Monto.SourceMessage
 import           Monto.Types
 
 import           Test.Hspec
@@ -46,61 +47,61 @@ spec = do
       javaCodeCompletion = "javaCodeCompletion" :: ServiceID
       javaParser = "javaParser" :: ServiceID
       javaTokenizer = "javaTokenizer" :: ServiceID
-      javaSource = PDEP.ProductDependency "source" "source" java
-      javaS1 vid = S.SourceMessage vid "s1" java ""
-      javaS2 vid = S.SourceMessage vid "s2" java ""
-      javaS3 vid = S.SourceMessage vid "s3" java ""
-      javaAstMsg vid src = P.ProductMessage vid src javaParser ast java "" (toJSON (0::Int))
-      javaTypeMsg vid src = P.ProductMessage vid src javaTypechecker errors java "" (toJSON (0::Int))
-      javaCodeCMsg vid src = P.ProductMessage vid src javaCodeCompletion completions java "" (toJSON (0::Int))
-      javaTokenMsg vid src = P.ProductMessage vid src javaTokenizer tokens java "" (toJSON (0::Int))
+      javaSource = ProductDependency "source" "source" java
+      javaS1 vid = SourceMessage vid "s1" java ""
+      javaS2 vid = SourceMessage vid "s2" java ""
+      javaS3 vid = SourceMessage vid "s3" java ""
+      javaAstMsg vid src = ProductMessage vid src javaParser ast java "" (toJSON (0::Int))
+      javaTypeMsg vid src = ProductMessage vid src javaTypechecker errors java "" (toJSON (0::Int))
+      javaCodeCMsg vid src = ProductMessage vid src javaCodeCompletion completions java "" (toJSON (0::Int))
+      javaTokenMsg vid src = ProductMessage vid src javaTokenizer tokens java "" (toJSON (0::Int))
 
       -- Python
-      pythonS20 i = S.SourceMessage i "s20" python ""
-      pythonS21 i = S.SourceMessage i "s21" python ""
+      pythonS20 i = SourceMessage i "s20" python ""
+      pythonS21 i = SourceMessage i "s21" python ""
       pythonParser = "pythonParser" :: ServiceID
       pythonIdentifierFinder = "pythonIdentifierFinder" :: ServiceID
       pythonCodeCompletion = "pythonCodeCompletion" :: ServiceID
-      pythonSource = PDEP.ProductDependency "source" "source" python
-      pythonAstMsg vid src = P.ProductMessage vid src pythonParser ast python "" (toJSON (0::Int))
-      pythonIdentifiersMsg vid src = P.ProductMessage vid src pythonIdentifierFinder identifiers python "" (toJSON (0::Int))
-      pythonSourceMsg vid src = S.SourceMessage vid src python ""
+      pythonSource = ProductDependency "source" "source" python
+      pythonAstMsg vid src = ProductMessage vid src pythonParser ast python "" (toJSON (0::Int))
+      pythonIdentifiersMsg vid src = ProductMessage vid src pythonIdentifierFinder identifiers python "" (toJSON (0::Int))
+      pythonSourceMsg vid src = SourceMessage vid src python ""
 
   context "Service management" $
 
     it "can handle services of two different languages" $ do
-          let broker = register pythonParser [PD.ProductDescription ast python] [pythonSource]
-                     $ register javaParser [PD.ProductDescription ast java] [javaSource]
+          let broker = register pythonParser [ProductDescription ast python] [pythonSource]
+                     $ register javaParser [ProductDescription ast java] [javaSource]
                      $ B.empty (Port 5010) (Port 5020)
           void $ flip execStateT broker $ do
             -- Arrival of sm of python s20 should only generate request for python parser for s20
             B.newVersion (pythonS20 v1) `shouldBeAsSetTuple`
-              ([Request "s20" pythonParser [SourceMessage (pythonS20 v1)]], [])
+              ([Request "s20" pythonParser [Req.SourceMessage (pythonS20 v1)]], [])
 
             -- Arrival of sm of java s1 should only generate request for java for s1
             B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-              ([Request "s1" javaParser [SourceMessage (javaS1 v1)]], [])
+              ([Request "s1" javaParser [Req.SourceMessage (javaS1 v1)]], [])
 
   context "Product dependencies" $ do
 
-    let broker = register javaCodeCompletion [PD.ProductDescription completions java] [javaSource, ProductDependency javaParser ast java]
-               $ register javaTypechecker [PD.ProductDescription errors java] [javaSource, ProductDependency javaParser ast java]
-               $ register javaParser [PD.ProductDescription ast java] [javaSource]
-               $ register javaTokenizer [PD.ProductDescription tokens java] [javaSource]
+    let broker = register javaCodeCompletion [ProductDescription completions java] [javaSource, ProductDependency javaParser ast java]
+               $ register javaTypechecker [ProductDescription errors java] [javaSource, ProductDependency javaParser ast java]
+               $ register javaParser [ProductDescription ast java] [javaSource]
+               $ register javaTokenizer [ProductDescription tokens java] [javaSource]
                $ B.empty (Port 5010) (Port 5020)
 
     it "can manage static server dependencies" $
       void $ flip execStateT broker $ do
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple` ([
-          Request "s1" javaParser [SourceMessage (javaS1 v1)],
-          Request "s1" javaTokenizer [SourceMessage (javaS1 v1)]
+          Request "s1" javaParser [Req.SourceMessage (javaS1 v1)],
+          Request "s1" javaTokenizer [Req.SourceMessage (javaS1 v1)]
           ], [])
 
         let ast1 = javaAstMsg v1 "s1"
         B.newProduct ast1 `shouldBeAsSetTuple` ([
-          Request "s1" javaCodeCompletion [SourceMessage (javaS1 v1), ProductMessage ast1],
-          Request "s1" javaTypechecker [SourceMessage (javaS1 v1), ProductMessage ast1]
+          Request "s1" javaCodeCompletion [Req.SourceMessage (javaS1 v1), Req.ProductMessage ast1],
+          Request "s1" javaTypechecker [Req.SourceMessage (javaS1 v1), Req.ProductMessage ast1]
           ], [])
 
         B.newProduct (javaTokenMsg v1 "s1") `shouldBeAsSetTuple` ([], [])
@@ -113,8 +114,8 @@ spec = do
             outdatedId = VersionID 41
 
         B.newVersion (javaS1 currentId) `shouldBeAsSetTuple` ([
-          Request "s1" javaParser [SourceMessage (javaS1 currentId)],
-          Request "s1" javaTokenizer [SourceMessage (javaS1 currentId)]
+          Request "s1" javaParser [Req.SourceMessage (javaS1 currentId)],
+          Request "s1" javaTokenizer [Req.SourceMessage (javaS1 currentId)]
           ], [])
 
         -- outdated product arrives
@@ -125,12 +126,12 @@ spec = do
   context "Dynamic dependencies" $ do
 
     it "creates requests for dynamic dependencies only if they have arrived" $ do
-      let broker = register pythonCodeCompletion [PD.ProductDescription completions python] [PDEP.ProductDependency pythonParser ast python]
+      let broker = register pythonCodeCompletion [ProductDescription completions python] [ProductDependency pythonParser ast python]
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
 
-        B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
+        B.newDynamicDependency (RegisterDynamicDependencies "s20" pythonCodeCompletion [DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
           Nothing
 
         -- Arrival of sm of s20 should generate no codeCompletion requests
@@ -141,10 +142,10 @@ spec = do
 
         -- Arrival of ast pm of s20 should generate codeCompletion request for s20
         B.newProduct pythonAstMsgS20 `shouldBeAsSetTuple`
-          ([Request "s20" pythonCodeCompletion [ProductMessage pythonAstMsgS20, SourceMessage (pythonS20 v1)]], [])
+          ([Request "s20" pythonCodeCompletion [Req.ProductMessage pythonAstMsgS20, Req.SourceMessage (pythonS20 v1)]], [])
 
     it "creates requests for new dynamic dependencies instantly, if they are already fulfilled" $ do
-      let broker = register pythonCodeCompletion [PD.ProductDescription completions python] []
+      let broker = register pythonCodeCompletion [ProductDescription completions python] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
 
@@ -153,36 +154,36 @@ spec = do
           ([], [])
 
         -- Registration of dynamic dependency 'code completions service for s20 depends on source of s20' should immediately generate request
-        B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
-          Just (Request "s20" pythonCodeCompletion [SourceMessage (pythonSourceMsg v1 "s20")])
+        B.newDynamicDependency (RegisterDynamicDependencies "s20" pythonCodeCompletion [DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
+          Just (Request "s20" pythonCodeCompletion [Req.SourceMessage (pythonSourceMsg v1 "s20")])
 
     it "overrides dynamic dependencies, if they are defined twice" $ do
       let broker = register pythonCodeCompletion [] []
-                 $ register pythonParser [PD.ProductDescription ast python] [pythonSource]
+                 $ register pythonParser [ProductDescription ast python] [pythonSource]
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
 
         -- pythonCodeCompletion has no static dependencies
 
         -- Register (s20,pythonCodeCompletion) depends on (s20,source)
-        B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
+        B.newDynamicDependency (RegisterDynamicDependencies "s20" pythonCodeCompletion [DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
           Nothing
 
         -- But then override (s20,source) with (s20,ast) dependency
-        B.newDynamicDependency (RD.RegisterDynamicDependencies "s20" pythonCodeCompletion [DD.DynamicDependency "s20" pythonParser ast python]) `shouldBe'`
+        B.newDynamicDependency (RegisterDynamicDependencies "s20" pythonCodeCompletion [DynamicDependency "s20" pythonParser ast python]) `shouldBe'`
           Nothing
 
         B.newVersion (pythonS20 v1) `shouldBeAsSetTuple`
-          ([Request "s20" pythonParser [SourceMessage (pythonS20 v1)]], [])
+          ([Request "s20" pythonParser [Req.SourceMessage (pythonS20 v1)]], [])
 
         -- Arrival of ast of s20 should generate request with only the ast dependency. Source dependency should have been overridden
         B.newProduct (pythonAstMsg v1 "s20") `shouldBeAsSetTuple`
-          ([Request "s20" pythonCodeCompletion [ProductMessage (pythonAstMsg v1 "s20")]], [])
+          ([Request "s20" pythonCodeCompletion [Req.ProductMessage (pythonAstMsg v1 "s20")]], [])
 
   context "CommandMessage dependencies" $ do
 
     it "should generate a CommandMessage, when its source dependency is fulfilled" $ do
-      let broker = register javaParser [PD.ProductDescription ast java] []
+      let broker = register javaParser [ProductDescription ast java] []
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
@@ -191,10 +192,10 @@ spec = do
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 javaParser "" "" [SourceMessage (javaS1 v1)]])
+          ([],[CommandMessage 1 1 javaParser "" "" [Req.SourceMessage (javaS1 v1)]])
 
     it "should generate a CommandMessage, once all its source dependencies are fulfilled" $ do
-      let broker = register javaParser [PD.ProductDescription ast java] []
+      let broker = register javaParser [ProductDescription ast java] []
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
@@ -206,10 +207,10 @@ spec = do
           ([],[])
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 javaParser "" "" [SourceMessage (javaS1 v1)]])
+          ([],[CommandMessage 1 1 javaParser "" "" [Req.SourceMessage (javaS1 v1)]])
 
     it "should generate a CommandMessage, when its product dependency is fulfilled" $ do
-      let broker = register javaParser [PD.ProductDescription ast java] [javaSource]
+      let broker = register javaParser [ProductDescription ast java] [javaSource]
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
@@ -218,14 +219,14 @@ spec = do
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([Request "s1" javaParser [SourceMessage (javaS1 v1)]],[])
+          ([Request "s1" javaParser [Req.SourceMessage (javaS1 v1)]],[])
 
         B.newProduct (javaAstMsg v1 "s1") `shouldBeAsSetTuple`
-          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [ProductMessage (javaAstMsg v1 "s1")]])
+          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 "s1")]])
 
     it "should generate a CommandMessage, once all its product dependencies are fulfilled" $ do
-      let broker = register javaParser [PD.ProductDescription ast java] [javaSource]
-                 $ register javaTokenizer [PD.ProductDescription tokens java] [javaSource]
+      let broker = register javaParser [ProductDescription ast java] [javaSource]
+                 $ register javaTokenizer [ProductDescription tokens java] [javaSource]
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
@@ -234,16 +235,16 @@ spec = do
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([Request "s1" javaParser [SourceMessage (javaS1 v1)],Request "s1" javaTokenizer [SourceMessage (javaS1 v1)]],[])
+          ([Request "s1" javaParser [Req.SourceMessage (javaS1 v1)],Request "s1" javaTokenizer [Req.SourceMessage (javaS1 v1)]],[])
 
         B.newProduct (javaTokenMsg v1 "s1") `shouldBeAsSetTuple`
           ([], [])
 
         B.newProduct (javaAstMsg v1 "s1") `shouldBeAsSetTuple`
-          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [ProductMessage (javaAstMsg v1 "s1"), ProductMessage (javaTokenMsg v1 "s1")]])
+          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 "s1"), Req.ProductMessage (javaTokenMsg v1 "s1")]])
 
     it "should generate a CommandMessage, once all its mixed dependencies are fulfilled" $ do
-      let broker = register javaParser [PD.ProductDescription ast java] [javaSource]
+      let broker = register javaParser [ProductDescription ast java] [javaSource]
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
@@ -252,14 +253,14 @@ spec = do
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([Request "s1" javaParser [SourceMessage (javaS1 v1)]], [])
+          ([Request "s1" javaParser [Req.SourceMessage (javaS1 v1)]], [])
 
         B.newProduct (javaAstMsg v1 "s1") `shouldBeAsSetTuple`
-          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [ProductMessage (javaAstMsg v1 "s1"), SourceMessage (javaS1 v1)]])
+          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 "s1"), Req.SourceMessage (javaS1 v1)]])
 
     it "only generate CommandMessages, with the last specified dependencies" $ do
-      let broker = register javaParser [PD.ProductDescription ast java] [javaSource]
-                 $ register javaTokenizer [PD.ProductDescription tokens java] [javaSource]
+      let broker = register javaParser [ProductDescription ast java] [javaSource]
+                 $ register javaTokenizer [ProductDescription tokens java] [javaSource]
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
@@ -272,16 +273,16 @@ spec = do
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([Request "s1" javaParser [SourceMessage (javaS1 v1)], Request "s1" javaTokenizer [SourceMessage (javaS1 v1)]], [])
+          ([Request "s1" javaParser [Req.SourceMessage (javaS1 v1)], Request "s1" javaTokenizer [Req.SourceMessage (javaS1 v1)]], [])
 
         B.newProduct (javaTokenMsg v1 "s1") `shouldBeAsSetTuple`
           ([], [])
 
         B.newProduct (javaAstMsg v1 "s1") `shouldBeAsSetTuple`
-          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [ProductMessage (javaAstMsg v1 "s1"), SourceMessage (javaS1 v1)]])
+          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 "s1"), Req.SourceMessage (javaS1 v1)]])
 
     it "not generate the same CommandMessages twice" $ do
-      let broker = register javaParser [PD.ProductDescription ast java] []
+      let broker = register javaParser [ProductDescription ast java] []
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
@@ -290,7 +291,7 @@ spec = do
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 javaParser "" "" [SourceMessage (javaS1 v1)]])
+          ([],[CommandMessage 1 1 javaParser "" "" [Req.SourceMessage (javaS1 v1)]])
 
         B.newVersion (javaS1 v2) `shouldBeAsSetTuple`
           ([],[])
@@ -312,10 +313,10 @@ spec = do
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 javaCodeCompletion "" "" [SourceMessage (javaS1 v1)]])
+          ([],[CommandMessage 1 1 javaCodeCompletion "" "" [Req.SourceMessage (javaS1 v1)]])
 
         B.newVersion (javaS2 v1) `shouldBeAsSetTuple`
-          ([],[CommandMessage 2 1 javaCodeCompletion "" "" [SourceMessage (javaS2 v1)]])
+          ([],[CommandMessage 2 1 javaCodeCompletion "" "" [Req.SourceMessage (javaS2 v1)]])
 
     it "should generated a CommandMessage if the new CommandMessageDependency is already fulfilled 1" $ do
       -- source dependency
@@ -328,27 +329,27 @@ spec = do
 
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
                                      [("s1", sourceService, sourceProduct, java)]) `shouldBe'`
-          Just (CommandMessage 1 1 javaCodeCompletion "" "" [SourceMessage (javaS1 v1)])
+          Just (CommandMessage 1 1 javaCodeCompletion "" "" [Req.SourceMessage (javaS1 v1)])
 
     it "should generated a CommandMessage if the new CommandMessageDependency is already fulfilled 2" $ do
       -- product dependency
-      let broker = register javaParser [PD.ProductDescription ast java] [javaSource]
+      let broker = register javaParser [ProductDescription ast java] [javaSource]
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([Request "s1" javaParser [SourceMessage (javaS1 v1)]],[])
+          ([Request "s1" javaParser [Req.SourceMessage (javaS1 v1)]],[])
 
         B.newProduct (javaAstMsg v1 "s1") `shouldBeAsSetTuple`
           ([],[])
 
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
                                      [("s1", javaParser, ast, java)]) `shouldBe'`
-          Just (CommandMessage 1 1 javaCodeCompletion "" "" [ProductMessage (javaAstMsg v1 "s1")])
+          Just (CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 "s1")])
 
     it "should only include the latest version of Messages as dependencies" $ do
-      let broker = register javaParser [PD.ProductDescription ast java] []
+      let broker = register javaParser [ProductDescription ast java] []
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
@@ -360,14 +361,14 @@ spec = do
 
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
                                      [("s1", sourceService, sourceProduct, java)]) `shouldBe'`
-          Just (CommandMessage 1 1 javaCodeCompletion "" "" [SourceMessage (javaS1 v2)])
+          Just (CommandMessage 1 1 javaCodeCompletion "" "" [Req.SourceMessage (javaS1 v2)])
 
   context "Combined dependencies" $
     it "should generate CommandMessages, product and dynamic dependencies in combination" $ do
-      let broker = register pythonIdentifierFinder [PD.ProductDescription identifiers python] [PDEP.ProductDependency pythonParser ast python]
-                 $ register pythonParser [PD.ProductDescription ast python] [pythonSource]
-                 $ register javaTypechecker [PD.ProductDescription errors java] [javaSource,PDEP.ProductDependency javaParser ast java]
-                 $ register javaParser [PD.ProductDescription ast java] [javaSource]
+      let broker = register pythonIdentifierFinder [ProductDescription identifiers python] [ProductDependency pythonParser ast python]
+                 $ register pythonParser [ProductDescription ast python] [pythonSource]
+                 $ register javaTypechecker [ProductDescription errors java] [javaSource,ProductDependency javaParser ast java]
+                 $ register javaParser [ProductDescription ast java] [javaSource]
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
 
@@ -396,14 +397,14 @@ spec = do
 
         -- Arrival of sm of s20 should generate parser request for s20
         B.newVersion (pythonS20 v1) `shouldBeAsSetTuple`
-          ([Request "s20" pythonParser [SourceMessage (pythonS20 v1)]], [])
+          ([Request "s20" pythonParser [Req.SourceMessage (pythonS20 v1)]], [])
 
         -- Arrival of sm of s21 should generate parser request for s21
         B.newVersion (pythonS21 v1) `shouldBeAsSetTuple`
-          ([Request "s21" pythonParser [SourceMessage (pythonS21 v1)]], [])
+          ([Request "s21" pythonParser [Req.SourceMessage (pythonS21 v1)]], [])
 
         -- Registration of dynamic dependency 'python parser service for s21 depends on ast of s20' should not generate requests
-        B.newDynamicDependency (RD.RegisterDynamicDependencies "s21" pythonParser [DD.DynamicDependency "s20" pythonParser ast python]) `shouldBe'`
+        B.newDynamicDependency (RegisterDynamicDependencies "s21" pythonParser [DynamicDependency "s20" pythonParser ast python]) `shouldBe'`
           Nothing
 
         -- Arrival of sm of s21 should generate no requests, because ast pm of s20 is also required to generate parser request for s21
@@ -414,8 +415,8 @@ spec = do
 
         -- Arrival of ast pm of s20 should generate parser request for s21 and identifier request for s20
         B.newProduct pythonAstMsgS20 `shouldBeAsSetTuple` ([
-          Request "s20" pythonIdentifierFinder [ProductMessage pythonAstMsgS20],
-          Request "s21" pythonParser [ProductMessage pythonAstMsgS20, SourceMessage (pythonS21 v1)]
+          Request "s20" pythonIdentifierFinder [Req.ProductMessage pythonAstMsgS20],
+          Request "s21" pythonParser [Req.ProductMessage pythonAstMsgS20, Req.SourceMessage (pythonS21 v1)]
           ], [])
 
         -- Test, that requests for directly fulfilled new dynamic dependencies get generated
@@ -429,15 +430,15 @@ spec = do
 
         -- Arrival of ast pm of s21 should generate identifer request for s21
         B.newProduct pythonAstMsgS21 `shouldBeAsSetTuple`
-          ([Request "s21" pythonIdentifierFinder [ProductMessage pythonAstMsgS21]], [])
+          ([Request "s21" pythonIdentifierFinder [Req.ProductMessage pythonAstMsgS21]], [])
 
         -- After registration of a dynamic dependency, that is already fulfilled, the request for it should be generated immediately
         -- completions of s21 now depends on ast of s21 (via product dependency) and on completions of s20 (via dynamic dependency)
 
         -- Registration of dynamic dependency 'code completions service for s21 depends on completions product of s20' should
         -- immediately generate request for itself, because all products and sources are already available
-        B.newDynamicDependency (RD.RegisterDynamicDependencies "s21" pythonIdentifierFinder [DD.DynamicDependency "s20" pythonIdentifierFinder identifiers python]) `shouldBe'`
-          Just (Request "s21" pythonIdentifierFinder [ProductMessage pythonAstMsgS21, ProductMessage pythonIdentifiersMsg20])
+        B.newDynamicDependency (RegisterDynamicDependencies "s21" pythonIdentifierFinder [DynamicDependency "s20" pythonIdentifierFinder identifiers python]) `shouldBe'`
+          Just (Request "s21" pythonIdentifierFinder [Req.ProductMessage pythonAstMsgS21, Req.ProductMessage pythonIdentifiersMsg20])
 
         -- Right now the IDE sends a CommandMessage to the pythonCodeCompletion service, because the user wants completions at one specific region in "s20"
         -- The broker doesn't get notified about any of this (by design).
@@ -448,7 +449,7 @@ spec = do
         B.newCommandMessageDependency (RegisterCommandMessageDependencies
                                          (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "77:5" [])
                                          [("s20",pythonIdentifierFinder,identifiers,python)]) `shouldBe'`
-          Just (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "77:5" [ProductMessage pythonIdentifiersMsg20])
+          Just (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "77:5" [Req.ProductMessage pythonIdentifiersMsg20])
 
         -- Then the user wants completions for "s21".
         -- The identifiers for "s21" have not yet arrived, so no CommandMessage should be returned
@@ -460,7 +461,7 @@ spec = do
         -- Now the completions for "s21" arrive and should trigger the resend of the "s21" pythonCodeCompletion CommandMessage
         let pythonIdentifiersMsg21 = pythonIdentifiersMsg v1 "s21"
         B.newProduct pythonIdentifiersMsg21 `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "5:0" [ProductMessage pythonIdentifiersMsg21]])
+          ([],[CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "5:0" [Req.ProductMessage pythonIdentifiersMsg21]])
 
         --
         --     s1                s2                s3
@@ -483,33 +484,33 @@ spec = do
             type1s3 = javaTypeMsg v1 "s3"
 
         -- Registration of dynamic dependency 'java typechecker service for s3 depends on errors of s2' should not generate requests
-        B.newDynamicDependency (RD.RegisterDynamicDependencies "s3" javaTypechecker [DD.DynamicDependency "s2" javaTypechecker errors java]) `shouldBe'`
+        B.newDynamicDependency (RegisterDynamicDependencies "s3" javaTypechecker [DynamicDependency "s2" javaTypechecker errors java]) `shouldBe'`
           Nothing
 
         -- Arrival of sm of s1 should generate parser request for s1
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([Request "s1" javaParser [SourceMessage (javaS1 v1)]], [])
+          ([Request "s1" javaParser [Req.SourceMessage (javaS1 v1)]], [])
 
         -- Arrival of ast pm of s1 should generate typechecker request for s1
         B.newProduct ast1s1 `shouldBeAsSetTuple`
-          ([Request "s1" javaTypechecker [ProductMessage ast1s1, SourceMessage (javaS1 v1)]], [])
+          ([Request "s1" javaTypechecker [Req.ProductMessage ast1s1, Req.SourceMessage (javaS1 v1)]], [])
 
         -- Arrival of sm of s2 should generate parser request for s2
         B.newVersion (javaS2 v1) `shouldBeAsSetTuple`
-          ([Request "s2" javaParser [SourceMessage (javaS2 v1)]], [])
+          ([Request "s2" javaParser [Req.SourceMessage (javaS2 v1)]], [])
 
         -- Arrival of ast pm of s2 should generate typechecker request for s2
         -- note: there is no dyn dep on errors of s2 yet, only on errors of s3
         B.newProduct ast1s2 `shouldBeAsSetTuple`
-          ([Request "s2" javaTypechecker [ProductMessage ast1s2, SourceMessage (javaS2 v1)]], [])
+          ([Request "s2" javaTypechecker [Req.ProductMessage ast1s2, Req.SourceMessage (javaS2 v1)]], [])
 
         -- Registration of dynamic dependency 'java typechecker service for s2 depends on errors of s1' should not generate requests
-        B.newDynamicDependency (RD.RegisterDynamicDependencies "s2" javaTypechecker [DD.DynamicDependency "s1" javaTypechecker errors java]) `shouldBe'`
+        B.newDynamicDependency (RegisterDynamicDependencies "s2" javaTypechecker [DynamicDependency "s1" javaTypechecker errors java]) `shouldBe'`
           Nothing
 
         -- Arrival of errors pm of s1 should generate typechecker request for s2, because of dynamic dependency
         B.newProduct type1s1 `shouldBeAsSetTuple`
-          ([Request "s2" javaTypechecker [ProductMessage type1s1, ProductMessage ast1s2, SourceMessage(javaS2 v1)]], [])
+          ([Request "s2" javaTypechecker [Req.ProductMessage type1s1, Req.ProductMessage ast1s2, Req.SourceMessage(javaS2 v1)]], [])
 
         -- Arrival of errors pm of s2 should generate no requests, because product dependencies of errors of s3 are not satiesfied
         B.newProduct type1s2 `shouldBeAsSetTuple`
@@ -517,15 +518,15 @@ spec = do
 
         -- Arrival of sm of s3 should generate parser request for s3
         B.newVersion (javaS3 v1) `shouldBeAsSetTuple`
-          ([Request "s3" javaParser [SourceMessage (javaS3 v1)]], [])
+          ([Request "s3" javaParser [Req.SourceMessage (javaS3 v1)]], [])
 
         -- Arrival of ast pm of s3 should generate typechecker request for s3
         B.newProduct ast1s3 `shouldBeAsSetTuple`
-          ([Request "s3" javaTypechecker [ProductMessage type1s2, ProductMessage ast1s3, SourceMessage (javaS3 v1)]], [])
+          ([Request "s3" javaTypechecker [Req.ProductMessage type1s2, Req.ProductMessage ast1s3, Req.SourceMessage (javaS3 v1)]], [])
 
         -- Arrival of errors pm of s1 should still generate typechecker request for s2, because of dynamic dependency
         B.newProduct type1s1 `shouldBeAsSetTuple`
-          ([Request "s2" javaTypechecker [ProductMessage ast1s2, ProductMessage type1s1, SourceMessage(javaS2 v1)]], [])
+          ([Request "s2" javaTypechecker [Req.ProductMessage ast1s2, Req.ProductMessage type1s1, Req.SourceMessage(javaS2 v1)]], [])
 
         -- Arrival of errors pm of s3 should generate no request, because nothing depends on it
         B.newProduct type1s3 `shouldBeAsSetTuple`
