@@ -171,7 +171,7 @@ newCommandMessageDependency regMsg broker =
   in (maybeCmgMsg, broker')
 
 -- |Creates requests for those registered services, whose product and dynamic dependencies are fulfilled.
--- The given (Product,Language) tuple indicated, which product in which language just became available.
+-- The given (Product,Language) tuple indicates, which product in which language just became available.
 -- The given (Source,ServiceID) tuple is used as a starting node in two dependency graphs.
 -- The starting point in the product DG is the given serviceID. The starting point in the dynamic DG is the given (source,serviceID).
 -- For all other nodes in the two DGs, that depend on these two starting point nodes,
@@ -221,6 +221,11 @@ isSatisfied rMgr (edges, (source, serviceID)) =
     else mapM (\(product, language) ->
       Req.ProductMessage <$> R.lookupProductMessage (source, serviceID, product, language) rMgr) edges
 
+-- |Returns CommandMessages, whose dependencies are fulfilled and also attached in the requirements field.
+-- The given (Source,ServiceID,Product,Language) tuple indicates, which source or product just became available,
+-- and is used to find a set of CommandMessages, whose dependencies could all be satisfied.
+-- All these CommandMessages are then passed to isCommandMessageSatisfied to checked, if all dependencies are really satisfied.
+-- CommandMessages, that are completly satisfied, get deleted from the dependency graph and an updated broker is returned.
 commandMessagesWithSatisfiedDependencies :: (Source,ServiceID,Product,Language) -> Broker -> ([CommandMessage], Broker)
 commandMessagesWithSatisfiedDependencies newSatisfiedDep broker =
   let graph = commandMessageDependencies broker
@@ -230,6 +235,9 @@ commandMessagesWithSatisfiedDependencies newSatisfiedDep broker =
       broker' = deleteCommandMessageDependencies cmdMsgs broker
   in (cmdMsgs, broker')
 
+-- |Looks up all dependencies of the given CommandMessage and checks if they are cached in the ResourceManager. If so, the
+-- requirements field of the given CommandMessage is overridden with the specified dependencies and it is returned as a Just.
+-- If at least one requirement is missing, Nothing is returned.
 isCommandMessageSatisfied :: CommandMessage -> ResourceManager -> DependencyGraphCommandMessages -> Maybe CommandMessage
 isCommandMessageSatisfied cmdMsg resMgr graph =
   (\requirements -> cmdMsg { CM.requirements = requirements })
@@ -239,6 +247,9 @@ isCommandMessageSatisfied cmdMsg resMgr graph =
                  else Req.ProductMessage <$> R.lookupProductMessage (source,serviceID,product,language) resMgr
              ) (DGCM.lookupCommandMessageDependencies cmdMsg graph)
 
+-- |Deletes the given CommandMessages from the CommandMessage dependency graph.
+-- This function should be called everytime CommandMessages are sent out the services, meaning
+-- their dependencies were fulfilled.
 deleteCommandMessageDependencies :: Foldable f => f CommandMessage -> Broker -> Broker
 deleteCommandMessageDependencies cmdMsgs broker =
   broker

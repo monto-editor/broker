@@ -8,6 +8,10 @@ import qualified Data.Set             as S
 import           Monto.CommandMessage (CommandMessage)
 import           Monto.Types
 
+-- |Represents a bipartite graph between CommandMessages and its dependencies :: Set (Source,ServiceID,Product,Language).
+-- Two maps are used to efficiently lookup dependencies of a CommandMessage (with cmdDeps)
+-- and which CommandMessages depend from a dependency tuple (depCmds).
+-- All functions keep the two maps consistent.
 data DependencyGraphCommandMessages
   = DependencyGraphCommandMessages
   { cmdDeps :: Map CommandMessage (Set (Source,ServiceID,Product,Language))
