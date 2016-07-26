@@ -26,6 +26,7 @@ data MessageFromService = ProductMessage ProductMessage
 $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "ProductMessage" -> "product"
-                     "DynamicDependency" -> "dependency"
+                     "DynamicDependency" -> "dyndep"
+                     "CommandMessageDependency" -> "cmddep"
                      c -> c
                  } ''MessageFromService)
