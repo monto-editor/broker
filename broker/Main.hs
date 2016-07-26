@@ -122,7 +122,7 @@ runIDEThread opts ctx appstate snk =
           when (debug opts) $ printf "sending discover response\n"
           Z.send snk [] $ convertBslToBs $ A.encode (IDE.DiscoverResponse services)
         Right (IDE.CommandMessage cmdMsg) -> do
-          when (debug opts) $ printf "command message -> broker: %s\n" (show cmdMsg)
+          when (debug opts) $ printf "cmdMsg -> broker: %s\n" (show cmdMsg)
           withMVar appstate $ \state ->
             sendToService (CM.serviceID cmdMsg) (A.encode (Service.CommandMessage cmdMsg)) state
 
@@ -238,7 +238,7 @@ onMessage opts handler msg (broker,pool) = do
     when (debug opts) $ printf "broker -> %s\n" (toText (Req.serviceID request))
     sendToService (Req.serviceID request) (A.encode (Service.Request request)) (broker',pool)
   forM_ cmdMgs $ \cmdMsg -> do
-    when (debug opts) $ printf "broker -> cmd %s\n" (toText (CM.serviceID cmdMsg))
+    when (debug opts) $ printf "broker -> %s (cmdMsg: %s)\n" (toText (CM.serviceID cmdMsg)) (show cmdMsg)
     sendToService (CM.serviceID cmdMsg) (A.encode (Service.CommandMessage cmdMsg)) (broker',pool)
   return (broker', pool)
 
