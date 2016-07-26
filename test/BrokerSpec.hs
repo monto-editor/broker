@@ -188,7 +188,7 @@ spec = do
 
       void $ flip execStateT broker $ do
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
-                                       [("s1",sourceService,sourceProduct,java)]) `shouldBe'`
+                                       [DynamicDependency "s1" sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
@@ -200,7 +200,7 @@ spec = do
 
       void $ flip execStateT broker $ do
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
-                                       [("s1",sourceService,sourceProduct,java),("s20",sourceService,sourceProduct,python)]) `shouldBe'`
+                                       [DynamicDependency "s1" sourceService sourceProduct java, DynamicDependency "s20" sourceService sourceProduct python]) `shouldBe'`
           Nothing
 
         B.newVersion (pythonS20 v1) `shouldBeAsSetTuple`
@@ -215,7 +215,7 @@ spec = do
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                       [("s1", javaParser, ast, java)]) `shouldBe'`
+                                       [DynamicDependency "s1" javaParser ast java]) `shouldBe'`
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
@@ -231,7 +231,7 @@ spec = do
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                       [("s1", javaParser, ast, java), ("s1", javaTokenizer, tokens, java)]) `shouldBe'`
+                                       [DynamicDependency "s1" javaParser ast java, DynamicDependency "s1" javaTokenizer tokens java]) `shouldBe'`
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
@@ -249,7 +249,7 @@ spec = do
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                       [("s1", javaParser, ast, java), ("s1", sourceService, sourceProduct, java)]) `shouldBe'`
+                                       [DynamicDependency "s1" javaParser ast java, DynamicDependency "s1" sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
@@ -265,11 +265,11 @@ spec = do
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                       [("s1", javaParser, ast, java), ("s1", javaTokenizer, tokens, java), ("s1", sourceService, sourceProduct, java)]) `shouldBe'`
+                                       [DynamicDependency "s1" javaParser ast java, DynamicDependency "s1" javaTokenizer tokens java, DynamicDependency "s1" sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                       [("s1", javaParser, ast, java), ("s1", sourceService, sourceProduct, java)]) `shouldBe'`
+                                       [DynamicDependency "s1" javaParser ast java, DynamicDependency "s1" sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
@@ -287,7 +287,7 @@ spec = do
 
       void $ flip execStateT broker $ do
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
-                                       [("s1",sourceService,sourceProduct,java)]) `shouldBe'`
+                                       [DynamicDependency "s1" sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
@@ -305,11 +305,11 @@ spec = do
 
       void $ flip execStateT broker $ do
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                       [("s1",sourceService,sourceProduct,java)]) `shouldBe'`
+                                       [DynamicDependency "s1" sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 2 1 javaCodeCompletion "" "" [])
-                                        [("s2",sourceService,sourceProduct,java)]) `shouldBe'`
+                                        [DynamicDependency "s2" sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
@@ -328,7 +328,7 @@ spec = do
           ([],[])
 
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                     [("s1", sourceService, sourceProduct, java)]) `shouldBe'`
+                                     [DynamicDependency "s1" sourceService sourceProduct java]) `shouldBe'`
           Just (CommandMessage 1 1 javaCodeCompletion "" "" [Req.SourceMessage (javaS1 v1)])
 
     it "should generated a CommandMessage if the new CommandMessageDependency is already fulfilled 2" $ do
@@ -345,7 +345,7 @@ spec = do
           ([],[])
 
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                     [("s1", javaParser, ast, java)]) `shouldBe'`
+                                     [DynamicDependency "s1" javaParser ast java]) `shouldBe'`
           Just (CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 "s1")])
 
     it "should only include the latest version of Messages as dependencies" $ do
@@ -360,7 +360,7 @@ spec = do
           ([],[])
 
         B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
-                                     [("s1", sourceService, sourceProduct, java)]) `shouldBe'`
+                                     [DynamicDependency "s1" sourceService sourceProduct java]) `shouldBe'`
           Just (CommandMessage 1 1 javaCodeCompletion "" "" [Req.SourceMessage (javaS1 v2)])
 
   context "Combined dependencies" $
@@ -448,14 +448,14 @@ spec = do
         -- This dependency is already fulfilled, so the CommandMessage should be returned immediately
         B.newCommandMessageDependency (RegisterCommandMessageDependencies
                                          (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "77:5" [])
-                                         [("s20",pythonIdentifierFinder,identifiers,python)]) `shouldBe'`
+                                         [DynamicDependency "s20" pythonIdentifierFinder identifiers python]) `shouldBe'`
           Just (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "77:5" [Req.ProductMessage pythonIdentifiersMsg20])
 
         -- Then the user wants completions for "s21".
         -- The identifiers for "s21" have not yet arrived, so no CommandMessage should be returned
         B.newCommandMessageDependency (RegisterCommandMessageDependencies
                                          (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "5:0" [])
-                                         [("s21",pythonIdentifierFinder,identifiers,python)]) `shouldBe'`
+                                         [DynamicDependency "s21" pythonIdentifierFinder identifiers python]) `shouldBe'`
           Nothing
 
         -- Now the completions for "s21" arrive and should trigger the resend of the "s21" pythonCodeCompletion CommandMessage

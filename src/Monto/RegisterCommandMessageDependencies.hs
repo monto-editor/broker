@@ -1,15 +1,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Monto.RegisterCommandMessageDependencies where
 
-import           Data.Aeson.Casing    (snakeCase)
+import           Data.Aeson.Casing       (snakeCase)
 import           Data.Aeson.TH
 
 import           Monto.CommandMessage
-import           Monto.Types
+import           Monto.DynamicDependency
 
 data RegisterCommandMessageDependencies = RegisterCommandMessageDependencies
     { commandMessage :: CommandMessage
-    , dependencies   :: [(Source,ServiceID,Product,Language)]
+    , dependencies   :: [DynamicDependency]
     } deriving (Eq,Show,Ord)
 
 $(deriveJSON (defaultOptions {

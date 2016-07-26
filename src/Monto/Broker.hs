@@ -93,6 +93,9 @@ toDynamicDependencyGraphTuples aesonDeps = fmap swap $ M.assocs $ foldl insertDy
     toGraphEdge dyndep' = (DD.product dyndep', DD.language dyndep')
     insertDynamicDependency map' dyndep' = M.insertWith (++) (toGraphNode dyndep') [toGraphEdge dyndep'] map'
 
+toCommandMessageDependencyGraphTuples :: [DD.DynamicDependency] -> [(Source,ServiceID,Product,Language)]
+toCommandMessageDependencyGraphTuples = fmap (\dynDep -> (DD.source dynDep, DD.serviceID dynDep, DD.product dynDep, DD.language dynDep))
+
 registerRequestToService :: Port -> RegisterServiceRequest -> Service
 registerRequestToService port r =
   Service (RQ.serviceID r) (RQ.label r) (RQ.description r) (RQ.products r) port (RQ.options r)
@@ -165,7 +168,10 @@ newCommandMessageDependency :: RCMD.RegisterCommandMessageDependencies -> Broker
 newCommandMessageDependency regMsg broker =
   let cmdMsg = RCMD.commandMessage regMsg
       broker' = broker
-                  { commandMessageDependencies = DGCM.addDependency (RCMD.commandMessage regMsg) (RCMD.dependencies regMsg) (commandMessageDependencies broker)
+                  { commandMessageDependencies = DGCM.addDependency
+                                                   (RCMD.commandMessage regMsg)
+                                                   (toCommandMessageDependencyGraphTuples (RCMD.dependencies regMsg))
+                                                   (commandMessageDependencies broker)
                   }
       maybeCmgMsg = isCommandMessageSatisfied cmdMsg (resourceMgr broker') (commandMessageDependencies broker')
   in (maybeCmgMsg, broker')
