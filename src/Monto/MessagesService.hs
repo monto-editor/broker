@@ -3,6 +3,7 @@ module Monto.MessagesService where
 
 import           Data.Aeson.TH
 import           Monto.CommandMessage
+import           Monto.CommandUpdate
 import           Monto.ConfigurationMessage
 import           Monto.ProductMessage
 import           Monto.RegisterCommandMessageDependencies
@@ -16,17 +17,19 @@ $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "Request" -> "request"
                      "ConfigurationMessage" -> "configuration"
-                     "CommandMessage" -> "command"
+                     "CommandMessage" -> "commandMessage"
                      c -> c
                  } ''MessageToService)
 
 data MessageFromService = ProductMessage ProductMessage
                         | DynamicDependency RegisterDynamicDependencies
                         | CommandMessageDependency RegisterCommandMessageDependencies
+                        | CommandUpdate CommandUpdate
 $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "ProductMessage" -> "product"
-                     "DynamicDependency" -> "dyndep"
-                     "CommandMessageDependency" -> "cmddep"
+                     "DynamicDependency" -> "dynDep"
+                     "CommandMessageDependency" -> "cmdDep"
+                     "CommandUpdate" -> "commandUpdate"
                      c -> c
                  } ''MessageFromService)
