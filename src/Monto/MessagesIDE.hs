@@ -3,7 +3,6 @@ module Monto.MessagesIDE where
 
 import           Data.Aeson.TH
 import           Monto.CommandMessage
-import           Monto.CommandUpdate
 import           Monto.ConfigurationMessage
 import           Monto.DiscoverRequest
 import           Monto.DiscoverResponse
@@ -19,17 +18,15 @@ $(deriveJSON defaultOptions
                      "SourceMessage" -> "source"
                      "ConfigurationMessages" -> "configurations"
                      "DiscoverRequest" -> "discovery"
-                     "CommandMessage" -> "commandMessage"
+                     "CommandMessage" -> "command"
                      c -> c
                  } ''MessageFromIDE)
 
 data MessageToIDE = ProductMessage ProductMessage
                   | DiscoverResponse [DiscoverResponse]
-                  | CommandUpdate CommandUpdate
 $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "ProductMessage" -> "product"
                      "DiscoverResponse" -> "discovery"
-                     "CommandUpdate" -> "commandUpdate"
                      c -> c
                  } ''MessageToIDE)

@@ -210,9 +210,6 @@ runServiceThread opts ctx snk appstate port@(Port p) =
         Right (Service.CommandMessageDependency msg) -> do
           when (debug opts) $ print msg
           modifyMVar_ appstate $ onRegisterCommandMessageDependenciesMessage msg
-        Right (Service.CommandUpdate msg) -> do
-          when (debug opts) $ print msg
-          Z.send snk [] $ convertBslToBs (A.encode (IDE.CommandUpdate msg))
         Left err -> printf "Couldn't parse this message from service: %s\nBecause %s\n" (show rawMsg) err
   where
     onProductMessage = onMessage opts B.newProduct
