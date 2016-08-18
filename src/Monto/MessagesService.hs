@@ -16,7 +16,7 @@ $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "Request" -> "request"
                      "ConfigurationMessage" -> "configuration"
-                     "CommandMessage" -> "command"
+                     "CommandMessage" -> "commandMessage"
                      c -> c
                  } ''MessageToService)
 
@@ -26,7 +26,7 @@ data MessageFromService = ProductMessage ProductMessage
 $(deriveJSON defaultOptions
                  { constructorTagModifier = \con -> case con of
                      "ProductMessage" -> "product"
-                     "DynamicDependency" -> "dyndep"
-                     "CommandMessageDependency" -> "cmddep"
+                     "DynamicDependency" -> "dynDep"
+                     "CommandMessageDependency" -> "cmdDep"
                      c -> c
                  } ''MessageFromService)

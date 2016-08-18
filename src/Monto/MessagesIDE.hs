@@ -18,7 +18,7 @@ $(deriveJSON defaultOptions
                      "SourceMessage" -> "source"
                      "ConfigurationMessages" -> "configurations"
                      "DiscoverRequest" -> "discovery"
-                     "CommandMessage" -> "command"
+                     "CommandMessage" -> "commandMessage"
                      c -> c
                  } ''MessageFromIDE)
 
