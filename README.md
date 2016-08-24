@@ -10,8 +10,7 @@ Build Instructions
 ------------------
 
 1. Build Requirements
-    * GHC >= 7.10.2
-    * Cabal >= 1.18
+    * Stack
     * ZeroMQ 4
     * pkgconfig
 
@@ -19,11 +18,8 @@ Build Instructions
    project and build the project.
 
    ```shell
-   $ cd monto-broker
-   $ cabal update
-   $ cabal sandbox init
-   $ cabal install --dependencies-only
-   $ cabal build
+   $ cd broker
+   $ stack build
    ```
 
-3. Start the broker with `bash start.sh`
+3. To start the broker simply run `start.sh`
