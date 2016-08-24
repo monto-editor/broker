@@ -1,8 +1,6 @@
 #!/bin/sh
 
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-
-$DIR/dist/build/broker/broker \
+stack exec broker -- \
 	--debug \
 	--source 'tcp://*:5000' \
 	--sink 'tcp://*:5001' \
