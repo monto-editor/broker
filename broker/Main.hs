@@ -17,6 +17,7 @@ import qualified Data.ByteString.Lazy.Char8    as BSL
 import qualified Data.List                     as List
 import           Data.Map                      (Map)
 import qualified Data.Map                      as M
+import           Data.Monoid                   ((<>))
 import qualified Data.Text                     as T
 import qualified Data.Text.IO                  as T
 
