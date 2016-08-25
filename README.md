@@ -13,12 +13,5 @@ Build Instructions
     * Stack
     * ZeroMQ 4
     * pkgconfig
-
-2. Build the project with stack.
-
-   ```shell
-   $ cd monto-broker
-   $ stack build
-   ```
-
-3. Start the broker with `start.sh`
+2. `cd` into the cloned repository and build the project with `stack build`.
+3. Start the broker with `./start.sh`
