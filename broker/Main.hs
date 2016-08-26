@@ -107,7 +107,7 @@ runSourceThread opts ctx appstate snk =
           services <- findServices <$> getBroker appstate
           when (debug opts) $ printf "discover response: %s\n" (show services)
           Z.send snk [] $ convertBslToBs $ A.encode (IDE.DiscoverResponse services)
-        Nothing -> putStrLn "message is not a version message"
+        Nothing -> putStrLn $ "message is not a version message: " ++ show rawMsg
   where
     findServices :: Broker -> [DiscoverResponse]
     findServices b = do
