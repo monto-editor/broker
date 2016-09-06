@@ -17,6 +17,7 @@ import           Data.Maybe
 
 import           Monto.ProductMessage (ProductMessage)
 import qualified Monto.ProductMessage as P
+import           Monto.Source
 import           Monto.SourceMessage  (SourceMessage)
 import qualified Monto.SourceMessage  as S
 import           Monto.Types

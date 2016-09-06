@@ -51,6 +51,7 @@ import           Monto.ResourceManager                    (ResourceManager)
 import qualified Monto.ResourceManager                    as R
 import           Monto.Service                            (Service (Service))
 import qualified Monto.Service                            as Ser
+import           Monto.Source
 import           Monto.SourceMessage                      (SourceMessage)
 import qualified Monto.SourceMessage                      as SM
 import           Monto.Types

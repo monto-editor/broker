@@ -3,7 +3,9 @@ module Monto.RegisterDynamicDependencies where
 
 import           Data.Aeson.Casing       (snakeCase)
 import           Data.Aeson.TH
+
 import           Monto.DynamicDependency
+import           Monto.Source
 import           Monto.Types
 
 data RegisterDynamicDependencies = RegisterDynamicDependencies

@@ -10,10 +10,6 @@ newtype VersionID = VersionID Int
   deriving (Eq,Ord,Show)
 $(deriveJSON defaultOptions ''VersionID)
 
-newtype Source    = Source Text
-  deriving (Eq,Ord,Show,IsString)
-$(deriveJSON defaultOptions ''Source)
-
 newtype Language = Language Text
   deriving (Eq,Ord,Show,IsString)
 $(deriveJSON defaultOptions ''Language)
@@ -37,10 +33,6 @@ $(deriveJSON defaultOptions ''OptionID)
 class IsText a where
   toText   :: a -> Text
   fromText :: Text -> a
-
-instance IsText Source where
-  toText (Source s) = s
-  fromText = Source
 
 instance IsText Language where
   toText (Language l) = l

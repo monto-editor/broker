@@ -108,7 +108,7 @@ runIDEThread opts ctx appstate snk =
       rawMsg <- Z.receive src
       case A.eitherDecodeStrict rawMsg of
         Right (IDE.SourceMessage msg) -> do
-          when (debug opts) $ T.putStrLn $ T.unwords [toText (S.source msg),"->", "broker"]
+          when (debug opts) $ printf "%s -> broker\n" (show (S.source msg))
           modifyMVar_ appstate $ onSourceMessage msg
         Right (IDE.ConfigurationMessages msgs) -> do
           when (debug opts) $ printf "config messages -> broker\n"

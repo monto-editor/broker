@@ -5,6 +5,7 @@ import           Data.Aeson.TH
 import           Data.Text     (Text)
 import           Prelude       hiding (id)
 
+import           Monto.Source
 import           Monto.Types
 
 data SourceMessage =

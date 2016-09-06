@@ -6,6 +6,7 @@ import           Data.Set             (Set)
 import qualified Data.Set             as S
 
 import           Monto.CommandMessage (CommandMessage)
+import           Monto.Source
 import           Monto.Types
 
 -- |Represents a bipartite graph between CommandMessages and its dependencies :: Set (Source,ServiceID,Product,Language).

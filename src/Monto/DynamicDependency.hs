@@ -4,6 +4,8 @@ module Monto.DynamicDependency where
 
 import           Data.Aeson.Casing (snakeCase)
 import           Data.Aeson.TH
+
+import           Monto.Source
 import           Monto.Types
 
 data DynamicDependency = DynamicDependency

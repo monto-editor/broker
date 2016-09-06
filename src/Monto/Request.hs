@@ -9,6 +9,7 @@ import           Data.Maybe
 import qualified Data.Set             as S
 
 import           Monto.ProductMessage (ProductMessage)
+import           Monto.Source
 import           Monto.SourceMessage  (SourceMessage)
 import           Monto.Types
 

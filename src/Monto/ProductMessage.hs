@@ -6,6 +6,7 @@ import           Data.Aeson.Casing (snakeCase)
 import           Data.Aeson.TH
 import           Prelude           hiding (id)
 
+import           Monto.Source
 import           Monto.Types
 
 data ProductMessage =

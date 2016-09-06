@@ -34,6 +34,7 @@ library
                        Monto.Request,
                        Monto.ResourceManager,
                        Monto.Service,
+                       Monto.Source,
                        Monto.SourceMessage,
                        Monto.Types
 
