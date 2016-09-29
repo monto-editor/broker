@@ -7,9 +7,9 @@ import qualified Data.Set                             as S
 import           Monto.CommandMessage
 import           Monto.DependencyGraphCommandMessages as DGCM
 import qualified Monto.Request                        as Req
+import           Monto.Source
 import           Monto.SourceMessage
 import           Monto.Types
-import Monto.Source
 
 import           Test.Hspec
 
