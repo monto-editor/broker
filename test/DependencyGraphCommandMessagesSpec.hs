@@ -9,6 +9,7 @@ import           Monto.DependencyGraphCommandMessages as DGCM
 import qualified Monto.Request                        as Req
 import           Monto.SourceMessage
 import           Monto.Types
+import Monto.Source
 
 import           Test.Hspec
 
@@ -17,8 +18,8 @@ spec = do
   let langJava = "java" :: Language
       langPython = "python" :: Language
 
-      source1 = "s1" :: Source
-      source2 = "s2" :: Source
+      source1 = Source "s1" Nothing
+      source2 = Source "s2" Nothing
 
       productCompletions = "completions" :: Product
       productSource = "source" :: Product
@@ -208,8 +209,8 @@ spec = do
 
     it "shouldn't identify a CommandMessage based on requirements" $
       -- if requirements is different on add and delete, the CommandMessage should still be deleted
-      DGCM.removeCommandMessage (CommandMessage 1 1 serviceParser "cmdDoStuff" "content" [Req.SourceMessage (SourceMessage (VersionID 1) "sourceFile2" langJava "source code")]) (
-        DGCM.addDependency (CommandMessage 1 1 serviceParser "cmdDoStuff" "content" [Req.SourceMessage (SourceMessage (VersionID 1) "sourceFile1" langJava "source code")]) [(source1,serviceSource,productSource,langJava)]
+      DGCM.removeCommandMessage (CommandMessage 1 1 serviceParser "cmdDoStuff" "content" [Req.SourceMessage (SourceMessage (VersionID 1) (Source "sourceFile2" Nothing) langJava "source code")]) (
+        DGCM.addDependency (CommandMessage 1 1 serviceParser "cmdDoStuff" "content" [Req.SourceMessage (SourceMessage (VersionID 1) (Source "sourceFile1" Nothing) langJava "source code")]) [(source1,serviceSource,productSource,langJava)]
             DGCM.empty
       ) `shouldBe`
         DGCM.empty
