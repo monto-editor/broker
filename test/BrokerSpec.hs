@@ -28,9 +28,8 @@ import           Test.Hspec
 
 spec :: Spec
 spec = do
-
-  let register sid prods deps = B.registerService (RegisterServiceRequest sid "" "" Nothing prods deps)
       -- Global
+  let register sid prods deps = B.registerService (RegisterServiceRequest sid "" "" Nothing prods deps [])
       java = "java" :: Language
       python = "python" :: Language
       tokens = "tokens" :: Product
@@ -193,19 +192,19 @@ spec = do
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "parserCmd" java "" [])
                                        [DynamicDependency s1 sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 javaParser "" "" [Req.SourceMessage (javaS1 v1)]])
+          ([],[CommandMessage 1 1 "parserCmd" java "" [Req.SourceMessage (javaS1 v1)]])
 
     it "should generate a CommandMessage, once all its source dependencies are fulfilled" $ do
       let broker = register javaParser [ProductDescription ast java] []
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "parserCmd" java "" [])
                                        [DynamicDependency s1 sourceService sourceProduct java, DynamicDependency s20 sourceService sourceProduct python]) `shouldBe'`
           Nothing
 
@@ -213,14 +212,14 @@ spec = do
           ([],[])
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 javaParser "" "" [Req.SourceMessage (javaS1 v1)]])
+          ([],[CommandMessage 1 1 "parserCmd" java "" [Req.SourceMessage (javaS1 v1)]])
 
     it "should generate a CommandMessage, when its product dependency is fulfilled" $ do
       let broker = register javaParser [ProductDescription ast java] [javaSource]
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "codeCompCmd" java "" [])
                                        [DynamicDependency s1 javaParser ast java]) `shouldBe'`
           Nothing
 
@@ -228,7 +227,7 @@ spec = do
           ([Request s1 javaParser [Req.SourceMessage (javaS1 v1)]],[])
 
         B.newProduct (javaAstMsg v1 s1) `shouldBeAsSetTuple`
-          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 s1)]])
+          ([], [CommandMessage 1 1 "codeCompCmd" java "" [Req.ProductMessage (javaAstMsg v1 s1)]])
 
     it "should generate a CommandMessage, once all its product dependencies are fulfilled" $ do
       let broker = register javaParser [ProductDescription ast java] [javaSource]
@@ -236,7 +235,7 @@ spec = do
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "codeCompCmd" java "" [])
                                        [DynamicDependency s1 javaParser ast java, DynamicDependency s1 javaTokenizer tokens java]) `shouldBe'`
           Nothing
 
@@ -247,14 +246,14 @@ spec = do
           ([], [])
 
         B.newProduct (javaAstMsg v1 s1) `shouldBeAsSetTuple`
-          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 s1), Req.ProductMessage (javaTokenMsg v1 s1)]])
+          ([], [CommandMessage 1 1 "codeCompCmd" java "" [Req.ProductMessage (javaAstMsg v1 s1), Req.ProductMessage (javaTokenMsg v1 s1)]])
 
     it "should generate a CommandMessage, once all its mixed dependencies are fulfilled" $ do
       let broker = register javaParser [ProductDescription ast java] [javaSource]
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "codeCompCmd" java "" [])
                                        [DynamicDependency s1 javaParser ast java, DynamicDependency s1 sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
@@ -262,7 +261,7 @@ spec = do
           ([Request s1 javaParser [Req.SourceMessage (javaS1 v1)]], [])
 
         B.newProduct (javaAstMsg v1 s1) `shouldBeAsSetTuple`
-          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 s1), Req.SourceMessage (javaS1 v1)]])
+          ([], [CommandMessage 1 1 "codeCompCmd" java "" [Req.ProductMessage (javaAstMsg v1 s1), Req.SourceMessage (javaS1 v1)]])
 
     it "only generate CommandMessages, with the last specified dependencies" $ do
       let broker = register javaParser [ProductDescription ast java] [javaSource]
@@ -270,11 +269,11 @@ spec = do
                  $ register javaCodeCompletion [] []
                  $ B.empty (Port 5010) (Port 5020)
       void $ flip execStateT broker $ do
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "codeCompCmd" java "" [])
                                        [DynamicDependency s1 javaParser ast java, DynamicDependency s1 javaTokenizer tokens java, DynamicDependency s1 sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "codeCompCmd" java "" [])
                                        [DynamicDependency s1 javaParser ast java, DynamicDependency s1 sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
@@ -285,19 +284,19 @@ spec = do
           ([], [])
 
         B.newProduct (javaAstMsg v1 s1) `shouldBeAsSetTuple`
-          ([], [CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 s1), Req.SourceMessage (javaS1 v1)]])
+          ([], [CommandMessage 1 1 "codeCompCmd" java "" [Req.ProductMessage (javaAstMsg v1 s1), Req.SourceMessage (javaS1 v1)]])
 
     it "not generate the same CommandMessages twice" $ do
       let broker = register javaParser [ProductDescription ast java] []
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaParser "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "parserCmd" java  "" [])
                                        [DynamicDependency s1 sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 javaParser "" "" [Req.SourceMessage (javaS1 v1)]])
+          ([],[CommandMessage 1 1 "parserCmd" java "" [Req.SourceMessage (javaS1 v1)]])
 
         B.newVersion (javaS1 v2) `shouldBeAsSetTuple`
           ([],[])
@@ -310,19 +309,19 @@ spec = do
                  $ B.empty (Port 5010) (Port 5020)
 
       void $ flip execStateT broker $ do
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "codeCompCmd" java "" [])
                                        [DynamicDependency s1 sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 2 1 javaCodeCompletion "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 2 1 "codeCompCmd" java "" [])
                                         [DynamicDependency s2 sourceService sourceProduct java]) `shouldBe'`
           Nothing
 
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 javaCodeCompletion "" "" [Req.SourceMessage (javaS1 v1)]])
+          ([],[CommandMessage 1 1 "codeCompCmd" java "" [Req.SourceMessage (javaS1 v1)]])
 
         B.newVersion (javaS2 v1) `shouldBeAsSetTuple`
-          ([],[CommandMessage 2 1 javaCodeCompletion "" "" [Req.SourceMessage (javaS2 v1)]])
+          ([],[CommandMessage 2 1 "codeCompCmd" java "" [Req.SourceMessage (javaS2 v1)]])
 
     it "should generated a CommandMessage if the new CommandMessageDependency is already fulfilled 1" $ do
       -- source dependency
@@ -333,9 +332,9 @@ spec = do
         B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
           ([],[])
 
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "codeCompCmd" java "" [])
                                      [DynamicDependency s1 sourceService sourceProduct java]) `shouldBe'`
-          Just (CommandMessage 1 1 javaCodeCompletion "" "" [Req.SourceMessage (javaS1 v1)])
+          Just (CommandMessage 1 1 "codeCompCmd" java "" [Req.SourceMessage (javaS1 v1)])
 
     it "should generated a CommandMessage if the new CommandMessageDependency is already fulfilled 2" $ do
       -- product dependency
@@ -350,9 +349,9 @@ spec = do
         B.newProduct (javaAstMsg v1 s1) `shouldBeAsSetTuple`
           ([],[])
 
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "codeCompCmd" java "" [])
                                      [DynamicDependency s1 javaParser ast java]) `shouldBe'`
-          Just (CommandMessage 1 1 javaCodeCompletion "" "" [Req.ProductMessage (javaAstMsg v1 s1)])
+          Just (CommandMessage 1 1 "codeCompCmd" java "" [Req.ProductMessage (javaAstMsg v1 s1)])
 
     it "should only include the latest version of Messages as dependencies" $ do
       let broker = register javaParser [ProductDescription ast java] []
@@ -365,9 +364,9 @@ spec = do
         B.newVersion (javaS1 v2) `shouldBeAsSetTuple`
           ([],[])
 
-        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 javaCodeCompletion "" "" [])
+        B.newCommandMessageDependency (RegisterCommandMessageDependencies (CommandMessage 1 1 "codeCompCmd" java "" [])
                                      [DynamicDependency s1 sourceService sourceProduct java]) `shouldBe'`
-          Just (CommandMessage 1 1 javaCodeCompletion "" "" [Req.SourceMessage (javaS1 v2)])
+          Just (CommandMessage 1 1 "codeCompCmd" java "" [Req.SourceMessage (javaS1 v2)])
 
   context "Combined dependencies" $
     it "should generate CommandMessages, product and dynamic dependencies in combination" $ do
@@ -453,21 +452,21 @@ spec = do
 
         -- This dependency is already fulfilled, so the CommandMessage should be returned immediately
         B.newCommandMessageDependency (RegisterCommandMessageDependencies
-                                         (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "77:5" [])
+                                         (CommandMessage 1 1 "completionsForRegion" python "77:5" [])
                                          [DynamicDependency s20 pythonIdentifierFinder identifiers python]) `shouldBe'`
-          Just (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "77:5" [Req.ProductMessage pythonIdentifiersMsg20])
+          Just (CommandMessage 1 1 "completionsForRegion" python "77:5" [Req.ProductMessage pythonIdentifiersMsg20])
 
         -- Then the user wants completions for "s21".
         -- The identifiers for "s21" have not yet arrived, so no CommandMessage should be returned
         B.newCommandMessageDependency (RegisterCommandMessageDependencies
-                                         (CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "5:0" [])
+                                         (CommandMessage 1 1 "completionsForRegion" python "5:0" [])
                                          [DynamicDependency s21 pythonIdentifierFinder identifiers python]) `shouldBe'`
           Nothing
 
         -- Now the completions for "s21" arrive and should trigger the resend of the "s21" pythonCodeCompletion CommandMessage
         let pythonIdentifiersMsg21 = pythonIdentifiersMsg v1 s21
         B.newProduct pythonIdentifiersMsg21 `shouldBeAsSetTuple`
-          ([],[CommandMessage 1 1 pythonCodeCompletion "completionsForRegion" "5:0" [Req.ProductMessage pythonIdentifiersMsg21]])
+          ([],[CommandMessage 1 1 "completionsForRegion" python "5:0" [Req.ProductMessage pythonIdentifiersMsg21]])
 
         --
         --     s1                s2                s3
