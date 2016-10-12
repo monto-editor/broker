@@ -24,10 +24,11 @@ import qualified Data.Text.IO                  as T
 import           Monto.Broker                  (Broker)
 import qualified Monto.Broker                  as B
 
+import qualified Monto.CommandDescription      as CmdDesc
 import           Monto.CommandMessage          (CommandMessage)
 import qualified Monto.CommandMessage          as CmdMsg
-import            Monto.ConfigurationMessage    as ConfMsg
-import       Monto.DeregisterService       (DeregisterService)
+import           Monto.ConfigurationMessage    as ConfMsg
+import           Monto.DeregisterService       (DeregisterService)
 import qualified Monto.DeregisterService       as DeregSer
 import           Monto.DiscoverResponse        (DiscoverResponse)
 import qualified Monto.DiscoverResponse        as DiscoverResp
@@ -127,7 +128,7 @@ runIDEThread opts ctx appstate snk =
         Right (MsgsIDE.CommandMessage cmdMsg) -> do
           when (debug opts) $ printf "cmdMsg -> broker: %s\n" (show cmdMsg)
           withMVar appstate $ \state ->
-            sendToService (CmdMsg.serviceID cmdMsg) (A.encode (MsgsSer.CommandMessage cmdMsg)) state
+            sendCommandMessageToConsumers opts cmdMsg state
 
         Left err -> printf "Couldn't parse this message from IDE: %s\nBecause %s\n" (show rawMsg) err
   where
@@ -233,6 +234,16 @@ sendToService sid msg (broker,pool) = void $ runMaybeT $ do
   socket <- maybeT $ M.lookup port pool
   lift $ Z.send socket [] $ convertBslToBs msg
 
+sendCommandMessageToConsumers :: Options -> CommandMessage -> AppState -> IO()
+sendCommandMessageToConsumers opts cmdMsg appState =
+  case (M.lookup (CmdDesc.CommandDescription (CmdMsg.command cmdMsg) (CmdMsg.language cmdMsg)) (B.commandConsumers (fst appState))) of
+    Just serviceIDs -> do
+      forM_ serviceIDs $ \serviceID -> do
+        when (debug opts) $ printf "broker -> %s (cmdMsg %s)\n" (toText serviceID) (show (CmdMsg.command cmdMsg))
+        sendToService serviceID (A.encode (MsgsSer.CommandMessage cmdMsg)) appState
+    Nothing -> do
+      when (debug opts) $ printf "cmdMsg %s has no consumers\n" (show (CmdMsg.command cmdMsg))
+
 onMessage :: Foldable f => Options -> (message -> Broker -> ((f Request,f CommandMessage),Broker)) -> message -> AppState -> IO AppState
 {-# INLINE onMessage #-}
 onMessage opts handler msg (broker,pool) = do
@@ -241,8 +252,8 @@ onMessage opts handler msg (broker,pool) = do
     when (debug opts) $ printf "broker -> %s\n" (toText (Req.serviceID request))
     sendToService (Req.serviceID request) (A.encode (MsgsSer.Request request)) (broker',pool)
   forM_ cmdMgs $ \cmdMsg -> do
-    when (debug opts) $ printf "broker -> %s (cmdMsg: %s)\n" (toText (CmdMsg.serviceID cmdMsg)) (show cmdMsg)
-    sendToService (CmdMsg.serviceID cmdMsg) (A.encode (MsgsSer.CommandMessage cmdMsg)) (broker',pool)
+    sendCommandMessageToConsumers opts cmdMsg (broker',pool)
+
   return (broker', pool)
 
 convertBslToBs :: BSL.ByteString -> BS.ByteString

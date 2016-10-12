@@ -13,6 +13,7 @@ tested-with:         GHC == 7.8.3
 
 library
   exposed-modules:     Monto.Broker,
+                       Monto.CommandDescription,
                        Monto.CommandMessage,
                        Monto.ConfigurationMessage,
                        Monto.DependencyGraph,

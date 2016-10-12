@@ -31,9 +31,9 @@ import           Data.Tuple                               (swap)
 
 import qualified Text.Show.Pretty                         as Pr
 
+import           Monto.CommandDescription                 (CommandDescription)
 import           Monto.CommandMessage                     (CommandMessage)
 import qualified Monto.CommandMessage                     as CM
-import           Monto.CommandMessageDescription          (CommandMessageDescription)
 import           Monto.DependencyGraph                    (DependencyGraph)
 import qualified Monto.DependencyGraph                    as DG
 import           Monto.DependencyGraphCommandMessages     (DependencyGraphCommandMessages)
@@ -63,7 +63,7 @@ data Broker = Broker
   , productDependencies        :: DependencyGraph ServiceID          [(Product,Language)]
   , dynamicDependencies        :: DependencyGraph (Source,ServiceID) [(Product,Language)]
   , commandMessageDependencies :: DependencyGraphCommandMessages
-  , commandMessageConsumer     :: Map CommandMessageDescription [ServiceID]
+  , commandConsumers           :: Map CommandDescription [ServiceID]
   , services                   :: Map ServiceID Service
   , portPool                   :: [Port]
   } deriving (Eq,Show)
@@ -75,7 +75,7 @@ empty from to = Broker
   , productDependencies = DG.register "source" [] DG.empty
   , dynamicDependencies = DG.empty
   , commandMessageDependencies = DGCM.empty
-  , commandMessageConsumer = M.empty
+  , commandConsumers = M.empty
   , services = M.empty
   , portPool = [from..to]
   }
@@ -112,11 +112,11 @@ registerService register broker =
         let serviceID = RQ.serviceID register
             service = registerRequestToService port register
             deps = toProductDependencyGraphTuples $ RQ.dependencies register
-            cmdMsgDescs = RQ.commandMessages register
+            cmds = RQ.commands register
         in broker
                { productDependencies = DG.register serviceID deps (productDependencies broker)
                , services = M.insert serviceID service (services broker)
-               , commandMessageConsumer = foldl (\(consumer,cmdMsgDesc) -> M.insertWith (++) cmdMsgDesc [serviceID] consumer) (commandMessageConsumer broker) cmdMsgDescs
+               , commandConsumers = foldl (\consumers cmd -> M.insertWith (++) cmd [serviceID] consumers) (commandConsumers broker) cmds
                , portPool = restPool
                }
     [] -> error "no more ports available"

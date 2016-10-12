@@ -18,6 +18,10 @@ newtype Product = Product Text
   deriving (Eq,Ord,Show,IsString)
 $(deriveJSON defaultOptions ''Product)
 
+newtype Command = Command Text
+  deriving (Eq,Ord,Show,IsString)
+$(deriveJSON defaultOptions ''Command)
+
 newtype Port = Port Int
   deriving (Eq,Ord,Show,Read,Enum)
 $(deriveJSON defaultOptions ''Port)
