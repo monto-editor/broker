@@ -18,7 +18,7 @@ data DependencyGraph v e
 instance (Show v, Show e) => Show (DependencyGraph v e) where
  show gr = G.prettify (dependencies gr)
 
-empty :: Ord v => DependencyGraph v e
+empty :: DependencyGraph v e
 empty = DependencyGraph
   { nodeMap      = M.empty
   , dependencies = G.empty
@@ -37,7 +37,7 @@ register from to gr =
     { dependencies = dependencies'
     }
 
-filterDeps :: Ord v => (v -> Bool) -> DependencyGraph v e -> DependencyGraph v e
+filterDeps :: (v -> Bool) -> DependencyGraph v e -> DependencyGraph v e
 filterDeps predicate gr =
   let (delete,keep) = M.partitionWithKey (\k _ -> predicate k) (nodeMap gr)
   in gr { dependencies = G.delNodes (M.elems delete) (dependencies gr)
