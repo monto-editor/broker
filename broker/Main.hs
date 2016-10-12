@@ -23,21 +23,23 @@ import qualified Data.Text.IO                  as T
 
 import           Monto.Broker                  (Broker)
 import qualified Monto.Broker                  as B
+
 import           Monto.CommandMessage          (CommandMessage)
-import qualified Monto.CommandMessage          as CM
-import           Monto.ConfigurationMessage    (ConfigurationMessage (..))
-import qualified Monto.DeregisterService       as D
+import qualified Monto.CommandMessage          as CmdMsg
+import            Monto.ConfigurationMessage    as ConfMsg
+import       Monto.DeregisterService       (DeregisterService)
+import qualified Monto.DeregisterService       as DeregSer
 import           Monto.DiscoverResponse        (DiscoverResponse)
 import qualified Monto.DiscoverResponse        as DiscoverResp
-import qualified Monto.MessagesIDE             as IDE
-import qualified Monto.MessagesService         as Service
-import qualified Monto.ProductMessage          as P
+import qualified Monto.MessagesIDE             as MsgsIDE
+import qualified Monto.MessagesService         as MsgsSer
+import qualified Monto.ProductMessage          as ProdMsg
 import qualified Monto.RegisterServiceRequest  as RQ
 import qualified Monto.RegisterServiceResponse as RS
 import           Monto.Request                 (Request)
 import qualified Monto.Request                 as Req
-import qualified Monto.Service                 as S
-import qualified Monto.SourceMessage           as S
+import qualified Monto.Service                 as Ser
+import qualified Monto.SourceMessage           as SrcMsg
 import           Monto.Types
 
 import           Options.Applicative
@@ -107,25 +109,25 @@ runIDEThread opts ctx appstate snk =
     forever $ do
       rawMsg <- Z.receive src
       case A.eitherDecodeStrict rawMsg of
-        Right (IDE.SourceMessage msg) -> do
-          when (debug opts) $ printf "%s -> broker\n" (show (S.source msg))
+        Right (MsgsIDE.SourceMessage msg) -> do
+          when (debug opts) $ printf "%s -> broker\n" (show (SrcMsg.source msg))
           modifyMVar_ appstate $ onSourceMessage msg
-        Right (IDE.ConfigurationMessages msgs) -> do
+        Right (MsgsIDE.ConfigurationMessages msgs) -> do
           when (debug opts) $ printf "config messages -> broker\n"
           --when (debug opts) $ printf "config messages: %s\n" (show msgs)
           withMVar appstate $ \state ->
-            forM_ msgs $ \c@(ConfigurationMessage sid _) ->
-              sendToService sid (A.encode (Service.ConfigurationMessage c)) state
-        Right (IDE.DiscoverRequest request) -> do
+            forM_ msgs $ \c@(ConfMsg.ConfigurationMessage sid _) ->
+              sendToService sid (A.encode (MsgsSer.ConfigurationMessage c)) state
+        Right (MsgsIDE.DiscoverRequest request) -> do
           when (debug opts) $ printf "discover request: %s\n" (show request)
           services <- findServices <$> getBroker appstate
           --when (debug opts) $ printf "discover response: %s\n" (show services)
           when (debug opts) $ printf "sending discover response\n"
-          Z.send snk [] $ convertBslToBs $ A.encode (IDE.DiscoverResponse services)
-        Right (IDE.CommandMessage cmdMsg) -> do
+          Z.send snk [] $ convertBslToBs $ A.encode (MsgsIDE.DiscoverResponse services)
+        Right (MsgsIDE.CommandMessage cmdMsg) -> do
           when (debug opts) $ printf "cmdMsg -> broker: %s\n" (show cmdMsg)
           withMVar appstate $ \state ->
-            sendToService (CM.serviceID cmdMsg) (A.encode (Service.CommandMessage cmdMsg)) state
+            sendToService (CmdMsg.serviceID cmdMsg) (A.encode (MsgsSer.CommandMessage cmdMsg)) state
 
         Left err -> printf "Couldn't parse this message from IDE: %s\nBecause %s\n" (show rawMsg) err
   where
@@ -181,13 +183,13 @@ onRegisterMessage opts register regSocket (broker, socketPool) = do
           sendRegisterServiceResponse regSocket "failed: service did not register correctly" Nothing
       return (broker', socketPool)
 
-onDeregisterMessage :: Z.Sender a => Options -> D.DeregisterService -> Socket a -> AppState -> IO AppState
+onDeregisterMessage :: Z.Sender a => Options -> DeregisterService -> Socket a -> AppState -> IO AppState
 onDeregisterMessage opts deregMsg socket (broker, socketPool)= do
-  T.putStrLn $ T.unwords ["deregister", toText (D.deregisterServiceID deregMsg), "->", "broker"]
+  T.putStrLn $ T.unwords ["deregister", toText (DeregSer.deregisterServiceID deregMsg), "->", "broker"]
   Z.send socket [] ""
-  case M.lookup (D.deregisterServiceID deregMsg) $ B.services broker of
+  case M.lookup (DeregSer.deregisterServiceID deregMsg) $ B.services broker of
     Just _ -> do
-      let broker' = B.deregisterService (D.deregisterServiceID deregMsg) broker
+      let broker' = B.deregisterService (DeregSer.deregisterServiceID deregMsg) broker
       when (debugGraphs opts) $ B.printProductDependencyGraph broker'
       return (broker', socketPool)
     Nothing -> return (broker, socketPool)
@@ -201,14 +203,14 @@ runServiceThread opts ctx snk appstate port@(Port p) =
     forever $ do
       rawMsg <- Z.receive serviceSocket
       case A.eitherDecodeStrict rawMsg of
-        Right (Service.ProductMessage msg) -> do
-          Z.send snk [] $ convertBslToBs (A.encode (IDE.ProductMessage msg))
-          when (debug opts) $ T.putStrLn $ T.concat [toText $ P.product msg, "/", toText $ P.language msg, " -> broker"]
+        Right (MsgsSer.ProductMessage msg) -> do
+          Z.send snk [] $ convertBslToBs (A.encode (MsgsIDE.ProductMessage msg))
+          when (debug opts) $ T.putStrLn $ T.concat [toText $ ProdMsg.product msg, "/", toText $ ProdMsg.language msg, " -> broker"]
           modifyMVar_ appstate $ onProductMessage msg
-        Right (Service.DynamicDependency msg) -> do
+        Right (MsgsSer.DynamicDependency msg) -> do
           when (debug opts) $ print msg
           modifyMVar_ appstate $ onRegisterDynamicDependenciesMessage msg
-        Right (Service.CommandMessageDependency msg) -> do
+        Right (MsgsSer.CommandMessageDependency msg) -> do
           when (debug opts) $ print msg
           modifyMVar_ appstate $ onRegisterCommandMessageDependenciesMessage msg
         Left err -> printf "Couldn't parse this message from service: %s\nBecause %s\n" (show rawMsg) err
@@ -227,7 +229,7 @@ getBroker = fmap fst . readMVar
 
 sendToService :: ServiceID -> BSL.ByteString -> AppState -> IO ()
 sendToService sid msg (broker,pool) = void $ runMaybeT $ do
-  port <- maybeT $ S.port <$> M.lookup sid (B.services broker)
+  port <- maybeT $ Ser.port <$> M.lookup sid (B.services broker)
   socket <- maybeT $ M.lookup port pool
   lift $ Z.send socket [] $ convertBslToBs msg
 
@@ -237,10 +239,10 @@ onMessage opts handler msg (broker,pool) = do
   let ((requests,cmdMgs),broker') = handler msg broker
   forM_ requests $ \request -> do
     when (debug opts) $ printf "broker -> %s\n" (toText (Req.serviceID request))
-    sendToService (Req.serviceID request) (A.encode (Service.Request request)) (broker',pool)
+    sendToService (Req.serviceID request) (A.encode (MsgsSer.Request request)) (broker',pool)
   forM_ cmdMgs $ \cmdMsg -> do
-    when (debug opts) $ printf "broker -> %s (cmdMsg: %s)\n" (toText (CM.serviceID cmdMsg)) (show cmdMsg)
-    sendToService (CM.serviceID cmdMsg) (A.encode (Service.CommandMessage cmdMsg)) (broker',pool)
+    when (debug opts) $ printf "broker -> %s (cmdMsg: %s)\n" (toText (CmdMsg.serviceID cmdMsg)) (show cmdMsg)
+    sendToService (CmdMsg.serviceID cmdMsg) (A.encode (MsgsSer.CommandMessage cmdMsg)) (broker',pool)
   return (broker', pool)
 
 convertBslToBs :: BSL.ByteString -> BS.ByteString
