@@ -6,7 +6,6 @@ import           Prelude           hiding (id)
 import           Data.Aeson        (Value)
 import           Data.Aeson.Casing (snakeCase)
 import           Data.Aeson.TH
-import           Data.Text         (Text)
 
 import           Monto.Request     (Message)
 import           Monto.Types

@@ -236,12 +236,12 @@ sendToService sid msg (broker,pool) = void $ runMaybeT $ do
 
 sendCommandMessageToConsumers :: Options -> CommandMessage -> AppState -> IO()
 sendCommandMessageToConsumers opts cmdMsg appState =
-  case (M.lookup (CmdDesc.CommandDescription (CmdMsg.command cmdMsg) (CmdMsg.language cmdMsg)) (B.commandConsumers (fst appState))) of
-    Just serviceIDs -> do
+  case M.lookup (CmdDesc.CommandDescription (CmdMsg.command cmdMsg) (CmdMsg.language cmdMsg)) (B.commandConsumers (fst appState)) of
+    Just serviceIDs ->
       forM_ serviceIDs $ \serviceID -> do
         when (debug opts) $ printf "broker -> %s (cmdMsg %s)\n" (toText serviceID) (show (CmdMsg.command cmdMsg))
         sendToService serviceID (A.encode (MsgsSer.CommandMessage cmdMsg)) appState
-    Nothing -> do
+    Nothing ->
       when (debug opts) $ printf "cmdMsg %s has no consumers\n" (show (CmdMsg.command cmdMsg))
 
 onMessage :: Foldable f => Options -> (message -> Broker -> ((f Request,f CommandMessage),Broker)) -> message -> AppState -> IO AppState
@@ -251,7 +251,7 @@ onMessage opts handler msg (broker,pool) = do
   forM_ requests $ \request -> do
     when (debug opts) $ printf "broker -> %s\n" (toText (Req.serviceID request))
     sendToService (Req.serviceID request) (A.encode (MsgsSer.Request request)) (broker',pool)
-  forM_ cmdMgs $ \cmdMsg -> do
+  forM_ cmdMgs $ \cmdMsg ->
     sendCommandMessageToConsumers opts cmdMsg (broker',pool)
 
   return (broker', pool)
