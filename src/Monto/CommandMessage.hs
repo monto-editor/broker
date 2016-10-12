@@ -15,17 +15,17 @@ data CommandMessage =
   CommandMessage
     { session      :: Int
     , id           :: Int
-    , serviceID    :: ServiceID
     , tag          :: Text
+    , language     :: Language
     , contents     :: Value
     , requirements :: [Message]
     } deriving (Show)
 
 instance Ord CommandMessage where
-  compare x y = compare (session x, id x, serviceID x, tag x) (session y, id y, serviceID y, tag y)
+  compare x y = compare (session x, id x, tag x) (session y, id y, tag y)
 
 instance Eq CommandMessage where
-  x == y = (session x, id x, serviceID x, tag x) == (session y, id y, serviceID y, tag y)
+  x == y = (session x, id x, tag x) == (session y, id y, tag y)
 
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = snakeCase
