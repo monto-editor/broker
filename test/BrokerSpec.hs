@@ -7,9 +7,11 @@ import           Control.Monad.State
 
 import           Data.Aeson                               (toJSON)
 import qualified Data.Set                                 as S
+import qualified Data.Map                                 as M
 
 import qualified Monto.Broker                             as B
 import           Monto.CommandMessage
+import           Monto.CommandDescription
 import           Monto.DynamicDependency
 import           Monto.ProductDependency
 import           Monto.ProductDescription
@@ -30,6 +32,7 @@ spec :: Spec
 spec = do
       -- Global
   let register sid prods deps = B.registerService (RegisterServiceRequest sid "" "" Nothing prods deps [])
+      registerCmds sid cmds = B.registerService (RegisterServiceRequest sid "" "" Nothing [] [] cmds)
       java = "java" :: Language
       python = "python" :: Language
       tokens = "tokens" :: Product
@@ -86,6 +89,44 @@ spec = do
             -- Arrival of sm of java s1 should only generate request for java for s1
             B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
               ([Request s1 javaParser [Req.SourceMessage (javaS1 v1)]], [])
+
+  context "CommandConsumer" $ do 
+
+    it "can handle one CommandConsumer from one service" $
+      B.commandConsumers (
+        registerCmds javaParser [CommandDescription "cmd1" java] 
+          (B.empty (Port 5010) (Port 5020))) `shouldBe`
+            M.fromList [(CommandDescription "cmd1" java, [javaParser])]
+
+    it "can handle two CommandConsumers from one service" $
+      B.commandConsumers (
+        registerCmds javaParser [CommandDescription "cmd1" java, CommandDescription "cmd2" java]
+          (B.empty (Port 5010) (Port 5020))) `shouldBe`
+            M.fromList [(CommandDescription "cmd1" java, [javaParser]),
+                        (CommandDescription "cmd2" java, [javaParser])]
+
+    it "can handle two CommandConsumers from one service" $
+      B.commandConsumers (
+        registerCmds javaParser [CommandDescription "cmd1" java, CommandDescription "cmd1" python]
+          (B.empty (Port 5010) (Port 5020))) `shouldBe`
+            M.fromList [(CommandDescription "cmd1" java, [javaParser]),
+                        (CommandDescription "cmd1" python, [javaParser])]
+
+
+    it "can handle distinct CommandConsumers from multiple services" $
+      B.commandConsumers (
+        registerCmds javaParser [CommandDescription "cmd1" java] (
+          registerCmds javaCodeCompletion [CommandDescription "cmd2" java]
+            (B.empty (Port 5010) (Port 5020)))) `shouldBe`
+              M.fromList [(CommandDescription "cmd1" java, [javaParser]),
+                          (CommandDescription "cmd2" java, [javaCodeCompletion])]
+
+    it "can handle the same CommandConsumer from multiple services" $
+      B.commandConsumers (
+        registerCmds javaParser [CommandDescription "cmd1" python] (
+          registerCmds javaCodeCompletion [CommandDescription "cmd1" python]
+            (B.empty (Port 5010) (Port 5020)))) `shouldBe`
+              M.fromList [(CommandDescription "cmd1" python, [javaParser, javaCodeCompletion])]
 
   context "Product dependencies" $ do
 

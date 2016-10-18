@@ -26,7 +26,6 @@ spec = do
 
       serviceSource = "source" :: ServiceID
       serviceCodeCompletion = "CodeCompletion" :: ServiceID
-      serviceParser = "parser" :: ServiceID
 
       cmdMsg1 = CommandMessage 1 1 "cmd1" langJava "" []
       cmdMsg2 = CommandMessage 2 1 "cmd2" langJava "" []
