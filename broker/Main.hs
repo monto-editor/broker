@@ -27,7 +27,7 @@ import qualified Monto.Broker                  as B
 import qualified Monto.CommandDescription      as CmdDesc
 import           Monto.CommandMessage          (CommandMessage)
 import qualified Monto.CommandMessage          as CmdMsg
-import           Monto.ConfigurationMessage    as ConfMsg
+import qualified Monto.ConfigurationMessage    as ConfMsg
 import           Monto.DeregisterService       (DeregisterService)
 import qualified Monto.DeregisterService       as DeregSer
 import           Monto.DiscoverResponse        (DiscoverResponse)
