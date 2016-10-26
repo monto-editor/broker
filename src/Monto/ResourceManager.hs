@@ -38,16 +38,16 @@ isOutdated pr resourceMgr = fromMaybe True $ do
 
 updateSource :: SourceMessage -> ResourceManager -> ResourceManager
 {-# INLINE updateSource #-}
-updateSource srcMsg resourceMgr@ResourceManager {sources = sourceMessages, products = ps} =
-  resourceMgr { sources = M.insert src srcMsg sourceMessages
-              , products = M.filterWithKey (\(s,_,_,_) _ -> s /= src) ps
+updateSource srcMsg resourceMgr@ResourceManager {sources = oldSourceMessages, products = oldProducts} =
+  resourceMgr { sources = M.insert src srcMsg oldSourceMessages
+              , products = M.filterWithKey (\(s,_,_,_) _ -> s /= src) oldProducts
               }
   where src = S.source srcMsg
 
 updateProduct :: ProductMessage -> ResourceManager -> ResourceManager
 {-# INLINE updateProduct #-}
-updateProduct prod resourceMgr@ResourceManager {products = ps} =
-  resourceMgr { products = M.insert k prod ps }
+updateProduct prod resourceMgr@ResourceManager {products = oldProducts} =
+  resourceMgr { products = M.insert k prod oldProducts }
   where
     k = (P.source prod,P.serviceID prod,P.product prod,P.language prod)
 
