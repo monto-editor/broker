@@ -6,12 +6,12 @@ module BrokerSpec(spec) where
 import           Control.Monad.State
 
 import           Data.Aeson                               (toJSON)
-import qualified Data.Set                                 as S
 import qualified Data.Map                                 as M
+import qualified Data.Set                                 as S
 
 import qualified Monto.Broker                             as B
-import           Monto.CommandMessage
 import           Monto.CommandDescription
+import           Monto.CommandMessage
 import           Monto.DynamicDependency
 import           Monto.ProductDependency
 import           Monto.ProductDescription
@@ -90,11 +90,11 @@ spec = do
             B.newVersion (javaS1 v1) `shouldBeAsSetTuple`
               ([Request s1 javaParser [Req.SourceMessage (javaS1 v1)]], [])
 
-  context "CommandConsumer" $ do 
+  context "CommandConsumer" $ do
 
     it "can handle one CommandConsumer from one service" $
       B.commandConsumers (
-        registerCmds javaParser [CommandDescription "cmd1" java] 
+        registerCmds javaParser [CommandDescription "cmd1" java]
           (B.empty (Port 5010) (Port 5020))) `shouldBe`
             M.fromList [(CommandDescription "cmd1" java, [javaParser])]
 
