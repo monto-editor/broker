@@ -1,11 +1,16 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Monto.RegisterCommandMessageDependencies where
 
 import           Data.Aeson.Casing       (snakeCase)
 import           Data.Aeson.TH
+import           Data.Text               (Text)
+import qualified Data.Text               as T
 
-import           Monto.CommandMessage
-import           Monto.DynamicDependency
+import           Monto.CommandMessage    (CommandMessage)
+import qualified Monto.CommandMessage    as CmdMsg
+import           Monto.DynamicDependency (DynamicDependency)
+import qualified Monto.DynamicDependency as DynDep
 
 data RegisterCommandMessageDependencies = RegisterCommandMessageDependencies
     { commandMessage :: CommandMessage
@@ -15,3 +20,6 @@ data RegisterCommandMessageDependencies = RegisterCommandMessageDependencies
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = snakeCase
 }) ''RegisterCommandMessageDependencies)
+
+toPrintableText :: RegisterCommandMessageDependencies -> Text
+toPrintableText reg = T.concat [CmdMsg.toPrintableText $ commandMessage reg, " on [", DynDep.toPrintableText $ dependencies reg, "]"]

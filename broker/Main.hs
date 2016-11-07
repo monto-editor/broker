@@ -2,45 +2,50 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
-import           System.Posix.Signals          (Handler (Catch), installHandler,
-                                                sigINT, sigTERM)
-import           System.ZMQ4                   (Context, Pair, Socket)
-import qualified System.ZMQ4                   as Z hiding (message, source)
+import           System.Posix.Signals                     (Handler (Catch),
+                                                           installHandler,
+                                                           sigINT, sigTERM)
+import           System.ZMQ4                              (Context, Pair,
+                                                           Socket)
+import qualified System.ZMQ4                              as Z hiding (message,
+                                                                source)
 
 import           Control.Concurrent
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
-import qualified Data.Aeson                    as A
-import qualified Data.ByteString.Char8         as BS
-import qualified Data.ByteString.Lazy.Char8    as BSL
-import qualified Data.List                     as List
-import           Data.Map                      (Map)
-import qualified Data.Map                      as M
-import           Data.Monoid                   ((<>))
-import qualified Data.Text                     as T
-import qualified Data.Text.IO                  as T
+import qualified Data.Aeson                               as A
+import qualified Data.ByteString.Char8                    as BS
+import qualified Data.ByteString.Lazy.Char8               as BSL
+import qualified Data.List                                as List
+import           Data.Map                                 (Map)
+import qualified Data.Map                                 as M
+import           Data.Monoid                              ((<>))
+import qualified Data.Text                                as T
+import qualified Data.Text.IO                             as T
 
-import           Monto.Broker                  (Broker)
-import qualified Monto.Broker                  as B
+import           Monto.Broker                             (Broker)
+import qualified Monto.Broker                             as B
 
-import qualified Monto.CommandDescription      as CmdDesc
-import           Monto.CommandMessage          (CommandMessage)
-import qualified Monto.CommandMessage          as CmdMsg
-import qualified Monto.ConfigurationMessage    as ConfMsg
-import           Monto.DeregisterService       (DeregisterService)
-import qualified Monto.DeregisterService       as DeregSer
-import           Monto.DiscoverResponse        (DiscoverResponse)
-import qualified Monto.DiscoverResponse        as DiscoverResp
-import qualified Monto.MessagesIDE             as MsgsIDE
-import qualified Monto.MessagesService         as MsgsSer
-import qualified Monto.ProductMessage          as ProdMsg
-import qualified Monto.RegisterServiceRequest  as RQ
-import qualified Monto.RegisterServiceResponse as RS
-import           Monto.Request                 (Request)
-import qualified Monto.Request                 as Req
-import qualified Monto.Service                 as Ser
-import qualified Monto.SourceMessage           as SrcMsg
+import qualified Monto.CommandDescription                 as CmdDesc
+import           Monto.CommandMessage                     (CommandMessage)
+import qualified Monto.CommandMessage                     as CmdMsg
+import qualified Monto.ConfigurationMessage               as ConfMsg
+import           Monto.DeregisterService                  (DeregisterService)
+import qualified Monto.DeregisterService                  as DeregSer
+import           Monto.DiscoverResponse                   (DiscoverResponse)
+import qualified Monto.DiscoverResponse                   as DiscoverResp
+import qualified Monto.MessagesIDE                        as MsgsIDE
+import qualified Monto.MessagesService                    as MsgsSer
+import qualified Monto.ProductMessage                     as ProdMsg
+import qualified Monto.RegisterCommandMessageDependencies as RegCmdMsgDeps
+import qualified Monto.RegisterDynamicDependencies        as RegDynDeps
+import qualified Monto.RegisterServiceRequest             as RQ
+import qualified Monto.RegisterServiceResponse            as RS
+import           Monto.Request                            (Request)
+import qualified Monto.Request                            as Req
+import qualified Monto.Service                            as Ser
+import qualified Monto.SourceMessage                      as SrcMsg
 import           Monto.Types
 
 import           Options.Applicative
@@ -126,7 +131,7 @@ runIDEThread opts ctx appstate snk =
           when (debug opts) $ printf "sending discover response\n"
           Z.send snk [] $ convertBslToBs $ A.encode (MsgsIDE.DiscoverResponse services)
         Right (MsgsIDE.CommandMessage cmdMsg) -> do
-          when (debug opts) $ printf "cmdMsg -> broker: %s\n" (show cmdMsg)
+          when (debug opts) $ printf "%s -> broker\n" $ CmdMsg.toPrintableText cmdMsg
           withMVar appstate $ \state ->
             sendCommandMessageToConsumers opts cmdMsg state
 
@@ -206,13 +211,13 @@ runServiceThread opts ctx snk appstate port@(Port p) =
       case A.eitherDecodeStrict rawMsg of
         Right (MsgsSer.ProductMessage msg) -> do
           Z.send snk [] $ convertBslToBs (A.encode (MsgsIDE.ProductMessage msg))
-          when (debug opts) $ T.putStrLn $ T.concat [toText $ ProdMsg.product msg, "/", toText $ ProdMsg.language msg, " -> broker"]
+          when (debug opts) $ printf "%s/%s -> broker\n" (toText $ ProdMsg.product msg) (toText $ ProdMsg.language msg)
           modifyMVar_ appstate $ onProductMessage msg
         Right (MsgsSer.DynamicDependency msg) -> do
-          when (debug opts) $ print msg
+          when (debug opts) $ printf "dynDep -> broker: %s\n" $ RegDynDeps.toPrintableText msg
           modifyMVar_ appstate $ onRegisterDynamicDependenciesMessage msg
         Right (MsgsSer.CommandMessageDependency msg) -> do
-          when (debug opts) $ print msg
+          when (debug opts) $ printf "cmdMsgDep -> broker: %s\n" $ RegCmdMsgDeps.toPrintableText msg
           modifyMVar_ appstate $ onRegisterCommandMessageDependenciesMessage msg
         Left err -> printf "Couldn't parse this message from service: %s\nBecause %s\n" (show rawMsg) err
   where
@@ -239,17 +244,17 @@ sendCommandMessageToConsumers opts cmdMsg appState =
   case M.lookup (CmdDesc.CommandDescription (CmdMsg.command cmdMsg) (CmdMsg.language cmdMsg)) (B.commandConsumers (fst appState)) of
     Just serviceIDs ->
       forM_ serviceIDs $ \serviceID -> do
-        when (debug opts) $ printf "broker -> %s (cmdMsg %s)\n" (toText serviceID) (show (CmdMsg.command cmdMsg))
+        when (debug opts) $ printf "broker -> %s: %s\n" (toText serviceID) (CmdMsg.toPrintableText cmdMsg)
         sendToService serviceID (A.encode (MsgsSer.CommandMessage cmdMsg)) appState
     Nothing ->
-      when (debug opts) $ printf "cmdMsg %s has no consumers\n" (show (CmdMsg.command cmdMsg))
+      when (debug opts) $ printf "%s has no consumers\n" $ CmdMsg.toPrintableText cmdMsg
 
 onMessage :: Foldable f => Options -> (message -> Broker -> ((f Request,f CommandMessage),Broker)) -> message -> AppState -> IO AppState
 {-# INLINE onMessage #-}
 onMessage opts handler msg (broker,pool) = do
   let ((requests,cmdMgs),broker') = handler msg broker
   forM_ requests $ \request -> do
-    when (debug opts) $ printf "broker -> %s\n" (toText (Req.serviceID request))
+    when (debug opts) $ printf "broker -> %s\n" $ toText $ Req.serviceID request
     sendToService (Req.serviceID request) (A.encode (MsgsSer.Request request)) (broker',pool)
   forM_ cmdMgs $ \cmdMsg ->
     sendCommandMessageToConsumers opts cmdMsg (broker',pool)

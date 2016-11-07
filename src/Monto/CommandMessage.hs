@@ -1,4 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Monto.CommandMessage where
 
 import           Prelude           hiding (id)
@@ -6,6 +7,8 @@ import           Prelude           hiding (id)
 import           Data.Aeson        (Value)
 import           Data.Aeson.Casing (snakeCase)
 import           Data.Aeson.TH
+import           Data.Text         (Text)
+import qualified Data.Text         as T
 
 import           Monto.Request     (Message)
 import           Monto.Types
@@ -29,3 +32,6 @@ instance Eq CommandMessage where
 $(deriveJSON (defaultOptions {
   fieldLabelModifier = snakeCase
 }) ''CommandMessage)
+
+toPrintableText :: CommandMessage -> Text
+toPrintableText cmdMsg = T.concat ["cmdMsg {", T.pack $ show $ session cmdMsg, ":", T.pack $ show $ id cmdMsg, " ", toText $ command cmdMsg, " ", toText $ language cmdMsg, "}"]

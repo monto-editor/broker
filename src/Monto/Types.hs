@@ -49,3 +49,7 @@ instance IsText Product where
 instance IsText ServiceID where
   toText (ServiceID s) = s
   fromText = ServiceID
+
+instance IsText Command where
+  toText (Command c) = c
+  fromText = Command
