@@ -5,4 +5,4 @@ stack exec broker -- \
   --sink 'tcp://*:5001' \
   --registration 'tcp://*:5002' \
   --servicesFrom "Port 5010" \
-  --servicesTo "Port 5025"
+  --servicesTo "Port 5035"
